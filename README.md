@@ -52,6 +52,15 @@ The following command will create a new stack named **ec-aws-poc** in the **us-w
 cfn-create-stack ec-aws-poc --region us-west-2 --template-file ec-standalone-2.template -K ../ec-aws-poc.pem -p "KeyName=ec-aws-poc;ECDownloadURL=http://s3.amazonaws.com/opscode-private-chef/ubuntu/10.04/x86_64/private-chef_1.4.6-1.ubuntu.10.04_amd64.deb?AWSAccessKeyId=AKIAJFEFN6I3YE4UAMLA&Expires=1378648806&Signature=zvOL4xmP4Ac2TMkKpOky%2B3xcjKw%3D;InstanceType=c1.medium;SSHLocation=0.0.0.0/0" -I $AWS_ACCESS_KEY -S $AWS_SECRET_KEY --capabilities CAPABILITY_IAM
 ```
 
+Using the Knife CloudFormation Plugin
+-------------------------------------
+
+There is also a [knife-cfn](https://github.com/neillturner/knife-cfn) plugin that will allow you to validate and create stacks using Knife.
+
+```
+knife cfn create yourstackname -p "KeyName=yourkey;ECDownloadURL=http://your-ec-download-url.com;SSHLocation=1.2.3.4/32" -f ec-standalone-centos-6-amd64_ebs.template --capabilities CAPABILITY_IAM
+```
+
 Using the AWS Management Console
 --------------------------------
 TODO
@@ -59,3 +68,5 @@ TODO
 Templates
 =========
 ec-standalone-ubuntu-10.04-amd64_ebs.template - Installs EC in standalone mode on an EBS-backed Ubuntu 10.04 instance.
+ec-standalone-centos-6-amd64_ebs.template - Installs EC in standalone mode on an EBS-backed CentOS 6 instance. The images in use are the ones from [Bashton](http://www.bashton.com/) since they include cloud-init
+ec-standalone-centos-6-amd64_ebs_s3bookshelf.template - Same as the CentOS6 template only this will set up EC to use S3 buckets for the bookshelf.
