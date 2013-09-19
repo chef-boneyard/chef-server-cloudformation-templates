@@ -178,7 +178,7 @@
   "Outputs" : {
     "ChefServerURL" : {
       "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "ChefServer", "PublicDnsName" ]}]] },
-      "Description" : "URL for newly Enterprise Chef server"
+      "Description" : "URL for newly created Enterprise Chef server"
     }
   }
 }
