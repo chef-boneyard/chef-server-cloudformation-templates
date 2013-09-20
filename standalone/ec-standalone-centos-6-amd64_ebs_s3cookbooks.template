@@ -65,6 +65,11 @@
       "ap-southeast-2" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-f261f0c8", "64HVM" : "NOT_YET_SUPPORTED" },
       "ap-northeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-651a9b64", "64HVM" : "NOT_YET_SUPPORTED" },
       "sa-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-b32cf7ae", "64HVM" : "NOT_YET_SUPPORTED" }
+    },
+
+    "ChefPackageData" : {
+      "oss" : { "Url" : "https://opscode-omnibus-packages.s3.amazonaws.com/el/6/x86_64/chef-server-11.0.8-1.el6.x86_64.rpm", "ControlCommand": "chef-server-ctl"},
+      "ec"  : { "Url" : { "Ref" : "ECDownloadURL" }, "ControlCommand": "private-chef-ctl" }
     }
 
   },
@@ -141,12 +146,6 @@
                 "libpng"   : []
               }
             },
-            "commands": {
-              "make_etc_opscode": {
-                "command" : "mkdir /etc/opscode",
-                "test": "test ! -d /etc/opscode"
-              }
-            },
             "files": {
               "/etc/opscode/private-chef.rb" : {
                 "content": { "Fn::Join" : ["", [
@@ -173,7 +172,7 @@
       },
       "Properties": {
         "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
-                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+                    { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
         "InstanceType"   : { "Ref" : "InstanceType" },
         "SecurityGroups" : [ {"Ref" : "ChefServerSecurityGroup"} ],
         "KeyName"        : { "Ref" : "KeyName" },
