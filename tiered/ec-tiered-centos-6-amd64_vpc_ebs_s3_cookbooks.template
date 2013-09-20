@@ -1,0 +1,885 @@
+
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  
+  "Description" : "AWS CloudFormation Template for a Tiered implementation of Enterprise Chef in a VPC with cookbook storage in S3.",
+  
+  "Parameters" : {
+      
+    "KeyName" : {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern" : "[-_ a-zA-Z0-9]*",
+      "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
+    },    
+
+    "ECDownloadURL": {
+      "Default": "",
+      "Description" : "Enterprise Chef Download Link",
+      "Type": "String"
+    },
+
+    "FrontendSize" : {
+      "Description" : "Number of EC2 instances to launch for the frontend servers",
+      "Type" : "Number",
+      "Default" : "2"
+    },
+
+    "FrontendInstanceType" : {
+      "Description" : "EC2 instance type for front-end server(s)",
+      "Type" : "String",
+      "Default" : "m1.large",
+      "AllowedValues" : [ "m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type with at least 4 vCPU and 4GB of RAM."
+    },
+
+    "BackendInstanceType" : {
+      "Description" : "EC2 instance type for the back-end server",
+      "Type" : "String",
+      "Default" : "c1.medium",
+      "AllowedValues" : [ "m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type with at least 4 vCPU and 4GB of RAM."
+    },
+
+    "BackendIPAddress" : {
+      "Description" : "The IP address to assign to the back-end server",
+      "Type" : "String",
+      "MinLength": "7",
+      "MaxLength": "15",
+      "Default" : "10.0.2.4",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
+      "ConstraintDescription": "must be a valid IPv4 address of the form x.x.x.x"
+    },
+
+    "BastionInstanceType" : {
+      "Description" : "Bastion Host EC2 instance type",
+      "Type" : "String",
+      "Default" : "t1.micro",
+      "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+
+    "NATInstanceType" : {
+      "Description" : "NAT Device EC2 instance type",
+      "Type" : "String",
+      "Default" : "m1.small",
+      "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+
+    "SSHLocation" : {
+      "Description" : " The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+
+    "SSLCertificateARN" : {
+      "Description" : "The ARN of the SSL certificate to use.",
+      "Type": "String"
+    }
+  },
+  
+  "Mappings" : {
+
+    "AWSNATAMI" : {
+      "us-east-1"      : { "AMI" : "ami-c6699baf" },
+      "us-west-2"      : { "AMI" : "ami-52ff7262" },
+      "us-west-1"      : { "AMI" : "ami-3bcc9e7e" },
+      "eu-west-1"      : { "AMI" : "ami-0b5b6c7f" },
+      "ap-southeast-1" : { "AMI" : "ami-02eb9350" },
+      "ap-southeast-2" : { "AMI" : "ami-ab990e91" },
+      "ap-northeast-1" : { "AMI" : "ami-14d86d15" },
+      "sa-east-1"      : { "AMI" : "ami-0439e619" }
+    },
+
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "m3.xlarge"   : { "Arch" : "64" },
+      "m3.2xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64HVM" },
+      "cc2.8xlarge" : { "Arch" : "64HVM" },
+      "cg1.4xlarge" : { "Arch" : "64HVM" }
+    },
+
+    "AWSRegionArch2AMI" : {
+      "us-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-52009e3b", "64HVM" : "ami-eec75e87" },
+      "us-west-2"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-e030a5d0", "64HVM" : "ami-503bae60" },
+      "us-west-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-0a2f024f", "64HVM" : "NOT_YET_SUPPORTED" },
+      "eu-west-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-8aa3a8fe", "64HVM" : "ami-e4b5be90" },
+      "ap-southeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-0c034f5e", "64HVM" : "NOT_YET_SUPPORTED" },
+      "ap-southeast-2" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-f261f0c8", "64HVM" : "NOT_YET_SUPPORTED" },
+      "ap-northeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-651a9b64", "64HVM" : "NOT_YET_SUPPORTED" },
+      "sa-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-b32cf7ae", "64HVM" : "NOT_YET_SUPPORTED" }
+    },
+
+    "SubnetConfig" : {
+      "VPC"     : { "CIDR" : "10.0.0.0/16" },
+      "Public"  : { "CIDR" : "10.0.1.0/24" },
+      "Private" : { "CIDR" : "10.0.2.0/24" }
+    }
+  },
+    
+  "Resources" : {
+
+    "VPC" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "VPC", "CIDR" ]},
+        "EnableDnsHostnames" : true,
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "PublicSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "Public", "CIDR" ]},
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "InternetGateway" : {
+      "Type" : "AWS::EC2::InternetGateway",
+      "Properties" : {
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "GatewayToInternet" : {
+       "Type" : "AWS::EC2::VPCGatewayAttachment",
+       "Properties" : {
+         "VpcId" : { "Ref" : "VPC" },
+         "InternetGatewayId" : { "Ref" : "InternetGateway" }
+       }
+    },
+
+    "PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "PublicRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PublicRouteTable" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : { "Ref" : "InternetGateway" }
+      }
+    },
+
+    "PublicSubnetRouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+      }
+    },
+
+    "PublicNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "InboundHTTPPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "80", "To" : "80" }
+      }
+    },
+
+    "InboundHTTPSPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "101",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "443", "To" : "443" }
+      }
+    },
+
+    "InboundSSHPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "102",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : { "Ref" : "SSHLocation" },
+        "PortRange" : { "From" : "22", "To" : "22" }
+      }
+    },
+
+    "InboundEphemeralPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "103",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "1024", "To" : "65535" }
+      }
+    },
+
+    "OutboundPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "true",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "0", "To" : "65535" }
+      }
+    },
+
+    "PublicSubnetNetworkAclAssociation" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet" },
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" }
+      }
+    },
+
+    "PrivateSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "Private", "CIDR" ]},
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Private" }
+        ]
+      }
+    },
+
+    "PrivateRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Private" }
+        ]
+      }
+    },
+
+    "PrivateSubnetRouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PrivateSubnet" },
+        "RouteTableId" : { "Ref" : "PrivateRouteTable" }
+      }
+    },
+
+    "PrivateRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PrivateRouteTable" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "InstanceId" : { "Ref" : "NATDevice" }
+      }
+    },
+
+    "PrivateNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+          { "Key" : "Network", "Value" : "Private" }
+        ]
+      }
+    },
+
+    "InboundPrivateNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "0", "To" : "65535" }
+      }
+    },
+
+    "OutBoundPrivateNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "true",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "0", "To" : "65535" }
+      }
+    },
+
+    "PrivateSubnetNetworkAclAssociation" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PrivateSubnet" },
+        "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" }
+      }
+    },
+
+    "NATIPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "Domain" : "vpc",
+        "InstanceId" : { "Ref" : "NATDevice" }
+      }
+    },
+
+    "NATDevice" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : { "Ref" : "NATInstanceType" },
+        "KeyName" : { "Ref" : "KeyName" },
+        "SubnetId" : { "Ref" : "PublicSubnet" },
+        "SourceDestCheck" : "false",
+        "ImageId" : { "Fn::FindInMap" : [ "AWSNATAMI", { "Ref" : "AWS::Region" }, "AMI" ]},
+        "SecurityGroupIds" : [{ "Ref" : "NATSecurityGroup" }]
+      }
+    },
+
+    "NATSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable internal access to the NAT device",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [
+           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0"} ,
+           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"} ,
+           { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Ref" : "SSHLocation" }} ],
+        "SecurityGroupEgress" : [
+           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0"} ,
+           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"} ]
+      }
+    },
+
+    "BastionIPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "Domain" : "vpc",
+        "InstanceId" : { "Ref" : "BastionHost" }
+      }
+    },
+
+    "BastionHost" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : { "Ref" : "BastionInstanceType" },
+        "KeyName"  : { "Ref" : "KeyName" },
+        "SubnetId" : { "Ref" : "PublicSubnet" },
+        "ImageId"  : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "BastionInstanceType" }, "Arch" ] } ] },
+        "SecurityGroupIds" : [{ "Ref" : "BastionSecurityGroup" }]
+      }
+    },
+
+    "BastionSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable access to the Bastion host",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Ref" : "SSHLocation" }} ],
+        "SecurityGroupEgress"  : [ { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Fn::FindInMap" : [ "SubnetConfig", "Private", "CIDR" ]}}]
+      }
+    },
+
+    "CfnUser" : {
+      "Type" : "AWS::IAM::User",
+      "Properties" : {
+        "Path": "/",
+        "Policies": [ {
+          "PolicyName": "root",
+          "PolicyDocument": { "Statement": [ {
+            "Effect":"Allow",
+            "Action":"cloudformation:DescribeStackResource",
+            "Resource":"*"
+          } ] }
+        } ]
+      }
+    },
+
+    "CfnAccessKey" : {
+      "Type" : "AWS::IAM::AccessKey",
+      "Properties" : {
+        "UserName" : { "Ref" : "CfnUser" }
+      }
+    },
+
+    "S3User" : {
+      "Type" : "AWS::IAM::User"
+    },
+
+    "S3AccessKey" : {
+      "Type" : "AWS::IAM::AccessKey",
+      "Properties" : {
+        "UserName" : { "Ref" : "S3User" }
+      }
+    },
+
+    "CookbooksBucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl" : "Private"
+      }
+    },
+
+    "CookbooksBucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "PolicyDocument": {
+          "Version"      : "2008-10-17",
+          "Id"           : "CookbooksWritePolicy",
+          "Statement"    : [
+            {
+              "Action"     : ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"} , "/*"]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["S3User", "Arn"]} }
+            },
+            {
+              "Action"     : ["s3:ListBucket"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"}]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["S3User", "Arn"]} }
+            }
+          ]
+        },
+        "Bucket" : {"Ref" : "CookbooksBucket"}
+      }
+    },
+
+    "OpscodeDataBucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl" : "Private"
+      }      
+    },
+
+    "OpscodeDataBucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "PolicyDocument": {
+          "Version"      : "2008-10-17",
+          "Id"           : "OpscodeDataPolicy",
+          "Statement"    : [
+            {
+              "Action"     : ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "OpscodeDataBucket"} , "/*"]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["S3User", "Arn"]} }
+            },
+            {
+              "Action"     : ["s3:ListBucket"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "OpscodeDataBucket"}]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["S3User", "Arn"]} }
+            }
+          ]
+        },
+        "Bucket" : {"Ref" : "OpscodeDataBucket"}
+      }
+    },
+
+    "BackendServer": {  
+      "Type": "AWS::EC2::Instance",
+      "Metadata" : {
+        "Comment1" : "Configure the backend servers to respond to requests",
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+              "yum" : {
+                "ntp"      : [],
+                "crontabs" : [],
+                "git"      : [],
+                "freetype" : [],
+                "libpng"   : [],
+                "s3cmd"    : []
+              }
+            },
+            "files" : {
+              "/etc/s3cfg": {
+                "content" : { "Fn::Join" : ["", [
+                   "[default]\n",
+                    "access_key = ", { "Ref" : "S3AccessKey" }, "\n",
+                    "secret_key = ", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "\n",
+                    "use_https = True\n"
+                    ]]},
+                "mode"  : "000600",
+                "owner" : "root",
+                "group" : "root" 
+              },
+              "/etc/opscode/private-chef.rb" : {
+                "content" : { "Fn::Join" : ["", [
+                  "topology \"tier\"\n",
+                  "server \"", { "Ref" : "BackendIPAddress" },"\",\n",
+                  "  :ipaddress => \"", { "Ref" : "BackendIPAddress" },"\",\n",
+                  "  :role => \"backend\",\n",
+                  "  :bootstrap => true\n",
+                  "\n",
+                  "backend_vip \"", { "Ref" : "BackendIPAddress" },"\",\n",
+                  "  :ipaddress => \"", { "Ref" : "BackendIPAddress" },"\"\n",
+                  "\n",
+                  "api_fqdn \"", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"\"\n",
+                  "\n",
+                  "bookshelf['vip'] = 's3.amazonaws.com'\n",
+                  "bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\n",
+                  "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\n",
+                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n"
+                ]]}
+              }
+            },
+            "services": {
+              "sysvinit": {
+                "ntpd": {
+                  "enabled" : "true",
+                  "ensureRunning" : "true"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                    { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "BackendInstanceType" }, "Arch" ] } ] },
+        "InstanceType"   : { "Ref" : "BackendInstanceType" },
+        "KeyName"        : { "Ref" : "KeyName" },
+        "PrivateIpAddress": { "Ref": "BackendIPAddress" },
+        "SecurityGroupIds" : [ {"Ref" : "BackendSecurityGroup"} ],
+        "SubnetId": { "Ref": "PrivateSubnet" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -v\n",
+
+          "function error_exit\n",
+          "{\n",
+          "  cfn-signal -e 1 -r \"$1\" '", { "Ref" : "BackendWaitHandle" }, "'\n",
+          "  exit 1\n",
+          "}\n",
+
+          "export HOME=\/root\n",
+          "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
+          "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
+          "export PATH=$PATH:/opt/aws/bin\n",
+          "cfn-init ",
+          "    -v -s ", { "Ref" : "AWS::StackName" }, " -r BackendServer ",
+          "         --access-key ", { "Ref" : "CfnAccessKey" },
+          "         --secret-key ", {"Fn::GetAtt": ["CfnAccessKey", "SecretAccessKey"]},
+          "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
+
+          "## Download the Enterprise Chef installer\n",
+          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm || error_exit 'Failed to install Chef Server\n",
+          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
+
+          "# Copy /etc/opscode pieces to S3 bucket\n",
+          "s3cmd -c /etc/s3cfg put /etc/opscode/*.pem s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg put /etc/opscode/*.cert s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg put /etc/opscode/private-chef-secrets.json s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
+
+          "# If all went well, signal success\n",
+          "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "BackendWaitHandle" }, "'\n"
+        ]]}}        
+      }
+    },
+
+    "BackendSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow access from frontend security group and bastion as well as outbound HTTP and HTTPS traffic",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "4321", "ToPort" : "4321", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "4369", "ToPort" : "4369", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "5140", "ToPort" : "5140", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "5432", "ToPort" : "5432", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "5672", "ToPort" : "5672", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "5984", "ToPort" : "5984", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "6379", "ToPort" : "6379", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "7788", "ToPort" : "7788", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "8000", "ToPort" : "8000", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "8983", "ToPort" : "8983", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9000", "ToPort" : "9000", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9460", "ToPort" : "9460", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9462", "ToPort" : "9463", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9465", "ToPort" : "9466", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9670", "ToPort" : "9672", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9680", "ToPort" : "9680", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9683", "ToPort" : "9683", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "9685", "ToPort" : "9685", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" } } ],
+        "SecurityGroupEgress" : [
+          { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
+          { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ]
+      }
+    },
+
+    "BackendWaitHandle" : {
+      "Type" : "AWS::CloudFormation::WaitConditionHandle"
+    },
+
+    "BackendWaitCondition" : {
+      "Type" : "AWS::CloudFormation::WaitCondition",
+      "DependsOn" : "BackendServer",
+      "Properties" : {
+        "Handle"  : { "Ref" : "BackendWaitHandle" },
+        "Timeout" : "600"
+      }
+    },
+
+    "PublicElasticLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "PublicLoadBalancerSecurityGroup" } ],
+        "Subnets" : [ { "Ref" : "PublicSubnet" } ],
+        "Listeners" : [           {
+            "InstancePort": "443",
+            "LoadBalancerPort": "443",
+            "Protocol": "HTTPS",
+            "SSLCertificateId": { "Ref": "SSLCertificateARN" }
+          },
+          { 
+            "LoadBalancerPort" : "80",
+            "InstancePort" : "80",
+            "Protocol" : "HTTP"
+          }
+        ],
+        "HealthCheck" : {
+          "Target" : "HTTP:80/",
+          "HealthyThreshold" : "3",
+          "UnhealthyThreshold" : "5",
+          "Interval" : "90",
+          "Timeout" : "60"
+        }
+      }
+    },
+
+    "PublicLoadBalancerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Public ELB Security Group with HTTP/HTTPS access on port 80/443 from the internet",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"}, { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"} ],
+        "SecurityGroupEgress" : [ { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"}, { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"} ]
+      }
+    },
+
+    "FrontendFleet" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "AvailabilityZones" : [{ "Fn::GetAtt" : [ "PrivateSubnet", "AvailabilityZone" ] }],
+        "VPCZoneIdentifier" : [{ "Ref" : "PrivateSubnet" }],
+        "LaunchConfigurationName" : { "Ref" : "FrontendServerLaunchConfig"  },
+        "MinSize" : "1",
+        "MaxSize" : "10",
+        "DesiredCapacity" : { "Ref" : "FrontendSize" },
+        "LoadBalancerNames" : [ { "Ref" : "PublicElasticLoadBalancer" } ],
+        "Tags" : [ { "Key" : "Network", "Value" : "Public", "PropagateAtLaunch" : "true" } ]
+      }
+    },
+
+    "FrontendServerLaunchConfig"  : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata" : {
+        "Comment1" : "Configure the bootstrap helpers to install Enterprise Chef front-end servers",
+
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+              "yum" : {
+                "ntp"      : [],
+                "crontabs" : [],
+                "git"      : [],
+                "freetype" : [],
+                "libpng"   : [],
+                "s3cmd"    : []
+              }
+            },
+            "files" : {
+              "/etc/s3cfg": {
+                "content" : { "Fn::Join" : ["", [
+                   "[default]\n",
+                    "access_key = ", { "Ref" : "S3AccessKey" }, "\n",
+                    "secret_key = ", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "\n",
+                    "use_https = True\n"
+                    ]]},
+                "mode"  : "000600",
+                "owner" : "root",
+                "group" : "root" 
+              }
+            },
+            "services": {
+              "sysvinit": {
+                "ntpd": {
+                  "enabled" : "true",
+                  "ensureRunning" : "true"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "FrontendInstanceType" }, "Arch" ] } ] },
+        "InstanceType"   : { "Ref" : "FrontendInstanceType" },
+        "SecurityGroups" : [ {"Ref" : "FrontendSecurityGroup"} ],
+        "KeyName"        : { "Ref" : "KeyName" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -v\n",
+
+          "function error_exit\n",
+          "{\n",
+          "  cfn-signal -e 1 -r \"$1\" '", { "Ref" : "FrontendWaitHandle" }, "'\n",
+          "  exit 1\n",
+          "}\n",
+
+          "PUBLIC_DNS=`(curl http://169.254.169.254/latest/meta-data/public-hostname)`\n",
+          "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
+          "SHORTNAME=`(echo $PUBLIC_DNS | cut -d \".\" -f1)`\n",
+          "export HOME=\/root\n",
+          "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
+          "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
+          "export PATH=$PATH:/opt/aws/bin\n",
+          "cfn-init ",
+          "    -v -s ", { "Ref" : "AWS::StackName" }, " -r FrontendServerLaunchConfig ",
+          "         --access-key ", { "Ref" : "CfnAccessKey" },
+          "         --secret-key ", {"Fn::GetAtt": ["CfnAccessKey", "SecretAccessKey"]},
+          "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
+
+          "## Download the Enterprise Chef installer\n",
+          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "hostname $SHORTNAME \n",
+          "echo $PUBLIC_DNS | sudo tee /etc/hostname\n",
+          "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
+          "## Generate /etc/opscode/private-chef.rb\n",
+
+          "echo \"topology 'tier'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"server '$PUBLIC_DNS'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :role => 'frontend'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"backend_vip \"", { "Ref": "BackendIPAddress" }, "\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :ipaddress => \"",  { "Ref": "BackendIPAddress" }, "\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"api_fqdn \"", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"\" >> /etc/opscode/private-chef.rb\n",
+
+          "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
+
+          "# Copy /etc/opscode pieces from S3 bucket\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.pem /etc/opscode/pivotal.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.cert /etc/opscode/pivotal.cert >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_priv.pem /etc/opscode/webui_priv.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_pub.pem /etc/opscode/webui_pub.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-private.pem /etc/opscode/worker-private.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-public.pem /etc/opscode/worker-public.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/private-chef-secrets.json /etc/opscode/private-chef-secrets.json >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
+
+          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
+
+          "# If all went well, signal success\n",
+          "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "FrontendWaitHandle" }, "'\n"
+        ]]}}        
+      }
+    },
+
+    "FrontendSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow access from load balancer and bastion as well as outbound HTTP and HTTPS traffic",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [
+          { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "SourceSecurityGroupId" : { "Ref" : "PublicLoadBalancerSecurityGroup" } } ,
+          { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "SourceSecurityGroupId" : { "Ref" : "PublicLoadBalancerSecurityGroup" } } ,
+          { "IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" } } ],
+        "SecurityGroupEgress" : [
+           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
+           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ]
+      }
+    },
+
+    "FrontendWaitHandle" : {
+      "Type" : "AWS::CloudFormation::WaitConditionHandle"
+    },
+
+    "FrontendWaitCondition" : {
+      "Type" : "AWS::CloudFormation::WaitCondition",
+      "DependsOn" : "FrontendFleet",
+      "Properties" : {
+        "Handle"  : { "Ref" : "FrontendWaitHandle" },
+        "Timeout" : "300",
+        "Count"   : { "Ref" : "FrontendSize" }
+      }
+    }
+    
+  },
+  
+  "Outputs" : {
+    "ChefServerURL" : {
+      "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}]] },
+      "Description" : "URL for newly Enterprise Chef server"
+    },
+    "Bastion" : {
+      "Description" : "IP Address of the Bastion host",
+      "Value" :  { "Ref" : "BastionIPAddress" }
+    }
+  }
+}
