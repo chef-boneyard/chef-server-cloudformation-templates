@@ -644,6 +644,14 @@
           "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/private-chef.rb\n",
           "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
 
+          "if [ x", { "Ref" : "NginxCertificate" }, " != x ] && [ x", { "Ref" : "NginxCertificateKey" }, " != x ]; then \n",
+          "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/private-chef.crt\n",
+          "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/private-chef.key\n",
+          "  chmod 400 /etc/pki/tls/private/private-chef.key\n",
+          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/private-chef.crt'\" >> /etc/opscode/private-chef.rb\n",
+          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/private-chef.key'\" >> /etc/opscode/private-chef.rb\n",
+          "fi\n",
+
           "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
@@ -654,7 +662,7 @@
           "s3cmd -c /etc/s3cfg put /etc/opscode/private-chef-secrets.json s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
 
           "# If all went well, signal success\n",
-          "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "BackendWaitHandle" }, "'\n"
+          "cfn-signal -e $? -r 'Chef backend server configuration' '", { "Ref" : "BackendWaitHandle" }, "'\n"
         ]]}}        
       }
     },
@@ -724,7 +732,7 @@
           }
         ],
         "HealthCheck" : {
-          "Target" : "HTTP:443/humans.txt",
+          "Target" : "HTTPS:443/humans.txt",
           "HealthyThreshold" : "3",
           "UnhealthyThreshold" : "5",
           "Interval" : "90",
@@ -868,7 +876,7 @@
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# If all went well, signal success\n",
-          "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "FrontendWaitHandle" }, "'\n"
+          "cfn-signal -e $? -r 'Chef frontend server configuration' '", { "Ref" : "FrontendWaitHandle" }, "'\n"
         ]]}}        
       }
     },
@@ -897,7 +905,7 @@
       "DependsOn" : "FrontendFleet",
       "Properties" : {
         "Handle"  : { "Ref" : "FrontendWaitHandle" },
-        "Timeout" : "300",
+        "Timeout" : "600",
         "Count"   : { "Ref" : "FrontendSize" }
       }
     }
