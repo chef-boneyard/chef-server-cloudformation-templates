@@ -546,6 +546,7 @@
           "config" : {
             "packages" : {
               "yum" : {
+                "curl"     : [],
                 "ntp"      : [],
                 "crontabs" : [],
                 "git"      : [],
@@ -565,25 +566,6 @@
                 "mode"  : "000600",
                 "owner" : "root",
                 "group" : "root" 
-              },
-              "/etc/opscode/private-chef.rb" : {
-                "content" : { "Fn::Join" : ["", [
-                  "topology \"tier\"\n",
-                  "server \"", { "Ref" : "BackendIPAddress" },"\",\n",
-                  "  :ipaddress => \"", { "Ref" : "BackendIPAddress" },"\",\n",
-                  "  :role => \"backend\",\n",
-                  "  :bootstrap => true\n",
-                  "\n",
-                  "backend_vip \"", { "Ref" : "BackendIPAddress" },"\",\n",
-                  "  :ipaddress => \"", { "Ref" : "BackendIPAddress" },"\"\n",
-                  "\n",
-                  "api_fqdn \"", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"\"\n",
-                  "\n",
-                  "bookshelf['vip'] = 's3.amazonaws.com'\n",
-                  "bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\n",
-                  "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\n",
-                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n"
-                ]]}
               }
             },
             "services": {
@@ -614,6 +596,10 @@
           "  exit 1\n",
           "}\n",
 
+          "SHORTNAME=`(curl -s http://169.254.169.254/latest/meta-data/local-hostname)`\n",
+          "LONGNAME=\"$SHORTNAME.ec2.internal\"\n",
+          "PRIVATE_IPV4=`(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
+
           "export HOME=\/root\n",
           "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
           "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
@@ -626,7 +612,27 @@
 
           "## Download the Enterprise Chef installer\n",
           "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm || error_exit 'Failed to install Chef Server\n",
+          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm || error_exit 'Failed to install Chef Server'\n",
+
+          "## Generate /etc/opscode/private-chef.rb\n",
+          "mkdir /etc/opscode\n",
+          "echo \"topology 'tier'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"server '$SHORTNAME',\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4',\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :role => 'backend',\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :bootstrap => true\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"backend_vip '$SHORTNAME',\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4'\" >> /etc/opscode/private-chef.rb\n",
+
+          "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"'\" >> /etc/opscode/private-chef.rb\n",
+
+          "echo \"bookshelf['vip'] = 's3.amazonaws.com'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
+
+          "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
+
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# Copy /etc/opscode pieces to S3 bucket\n",
@@ -725,6 +731,7 @@
 
     "FrontendFleet" : {
       "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "DependsOn": "BackendWaitCondition",
       "Properties" : {
         "AvailabilityZones" : [{ "Fn::GetAtt" : [ "PrivateSubnet", "AvailabilityZone" ] }],
         "VPCZoneIdentifier" : [{ "Ref" : "PrivateSubnet" }],
@@ -746,6 +753,7 @@
           "config" : {
             "packages" : {
               "yum" : {
+                "curl"     : [],
                 "ntp"      : [],
                 "crontabs" : [],
                 "git"      : [],
@@ -793,9 +801,10 @@
           "  exit 1\n",
           "}\n",
 
-          "PUBLIC_DNS=`(curl http://169.254.169.254/latest/meta-data/public-hostname)`\n",
-          "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
-          "SHORTNAME=`(echo $PUBLIC_DNS | cut -d \".\" -f1)`\n",
+          "SHORTNAME=`(curl -s http://169.254.169.254/latest/meta-data/local-hostname)`\n",
+          "LONGNAME=\"$SHORTNAME.ec2.internal\"\n",
+          "PRIVATE_IPV4=`(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
+
           "export HOME=\/root\n",
           "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
           "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
@@ -809,29 +818,29 @@
           "## Download the Enterprise Chef installer\n",
           "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
           "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "hostname $SHORTNAME \n",
-          "echo $PUBLIC_DNS | sudo tee /etc/hostname\n",
-          "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
-          "## Generate /etc/opscode/private-chef.rb\n",
 
+          "## Generate /etc/opscode/private-chef.rb\n",
+          "mkdir /etc/opscode\n",
           "echo \"topology 'tier'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"server '$PUBLIC_DNS'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :ipaddress => '$PRIVATE_IPV4'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"server '$SHORTNAME',\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4',\" >> /etc/opscode/private-chef.rb\n",
           "echo \"  :role => 'frontend'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"backend_vip \"", { "Ref": "BackendIPAddress" }, "\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :ipaddress => \"",  { "Ref": "BackendIPAddress" }, "\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"api_fqdn \"", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"backend_vip '", { "Ref": "BackendIPAddress" }, "',\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"  :ipaddress => '",  { "Ref": "BackendIPAddress" }, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}, "'\" >> /etc/opscode/private-chef.rb\n",
 
           "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
 
           "# Copy /etc/opscode pieces from S3 bucket\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.pem /etc/opscode/pivotal.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.cert /etc/opscode/pivotal.cert >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_priv.pem /etc/opscode/webui_priv.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_pub.pem /etc/opscode/webui_pub.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-private.pem /etc/opscode/worker-private.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-public.pem /etc/opscode/worker-public.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.pem /etc/opscode/pivotal.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.cert /etc/opscode/pivotal.cert >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_priv.pem /etc/opscode/webui_priv.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_pub.pem /etc/opscode/webui_pub.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-private.pem /etc/opscode/worker-private.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-public.pem /etc/opscode/worker-public.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
           "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/private-chef-secrets.json /etc/opscode/private-chef-secrets.json >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
+
+          "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
 
