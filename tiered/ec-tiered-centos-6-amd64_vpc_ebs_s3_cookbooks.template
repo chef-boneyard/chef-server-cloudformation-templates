@@ -35,6 +35,18 @@
       "ConstraintDescription" : "must be a valid EC2 instance type with at least 4 vCPU and 4GB of RAM."
     },
 
+    "NginxCertificate" : {
+      "Default": "",
+      "Description" : "nginx certificate download link",
+      "Type": "String"
+    },
+
+    "NginxCertificateKey" : {
+      "Default": "",
+      "Description" : "nginx key download link",
+      "Type": "String"
+    },
+
     "BackendInstanceType" : {
       "Description" : "EC2 instance type for the back-end server",
       "Type" : "String",
@@ -547,6 +559,7 @@
             "packages" : {
               "yum" : {
                 "curl"     : [],
+                "wget"     : [],
                 "ntp"      : [],
                 "crontabs" : [],
                 "git"      : [],
@@ -700,6 +713,7 @@
         "Listeners" : [           {
             "InstancePort": "443",
             "LoadBalancerPort": "443",
+            "InstanceProtocol": "HTTPS",
             "Protocol": "HTTPS",
             "SSLCertificateId": { "Ref": "SSLCertificateARN" }
           },
@@ -710,7 +724,7 @@
           }
         ],
         "HealthCheck" : {
-          "Target" : "HTTP:80/",
+          "Target" : "HTTP:443/humans.txt",
           "HealthyThreshold" : "3",
           "UnhealthyThreshold" : "5",
           "Interval" : "90",
@@ -754,6 +768,7 @@
             "packages" : {
               "yum" : {
                 "curl"     : [],
+                "wget"     : [],
                 "ntp"      : [],
                 "crontabs" : [],
                 "git"      : [],
@@ -830,6 +845,14 @@
           "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}, "'\" >> /etc/opscode/private-chef.rb\n",
 
           "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
+
+          "if [ x", { "Ref" : "NginxCertificate" }, " != x ] && [ x", { "Ref" : "NginxCertificateKey" }, " != x ]; then \n",
+          "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/private-chef.crt\n",
+          "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/private-chef.key\n",
+          "  chmod 400 /etc/pki/tls/private/private-chef.key\n",
+          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/private-chef.crt'\" >> /etc/opscode/private-chef.rb\n",
+          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/private-chef.key'\" >> /etc/opscode/private-chef.rb\n",
+          "fi\n",
 
           "# Copy /etc/opscode pieces from S3 bucket\n",
           "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.pem /etc/opscode/pivotal.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
