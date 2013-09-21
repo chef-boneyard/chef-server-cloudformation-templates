@@ -67,6 +67,15 @@ TODO
 
 Templates
 =========
+
+Standalone
+----------
+
 ec-standalone-ubuntu-10.04-amd64_ebs.template - Installs EC in standalone mode on an EBS-backed Ubuntu 10.04 instance.
 ec-standalone-centos-6-amd64_ebs.template - Installs EC in standalone mode on an EBS-backed CentOS 6 instance. The images in use are the ones from [Bashton](http://www.bashton.com/) since they include cloud-init
 ec-standalone-centos-6-amd64_ebs_s3bookshelf.template - Same as the CentOS6 template only this will set up EC to use S3 buckets for the bookshelf.
+
+Tiered
+------
+
+* ec-tiered-centos-6-amd64_vpc_ebs_s3_cookbooks.template - Installs EC in tiered mode. Note that the stack name has to be 35 characters or less, otherwise the OpenSSL CN will be too long and EC won't be able to generate a certificate.
