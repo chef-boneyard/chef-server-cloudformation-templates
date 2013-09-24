@@ -717,7 +717,7 @@
       "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
       "Properties" : {
         "SecurityGroups" : [ { "Ref" : "PublicLoadBalancerSecurityGroup" } ],
-        "Subnets" : [ { "Ref" : "PublicSubnet" } ],
+        "Subnets" : [ { "Ref" : "PrivateSubnet" } ],
         "Listeners" : [           {
             "InstancePort": "443",
             "LoadBalancerPort": "443",
@@ -851,6 +851,9 @@
           "echo \"  :ipaddress => '",  { "Ref": "BackendIPAddress" }, "'\" >> /etc/opscode/private-chef.rb\n",
           "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}, "'\" >> /etc/opscode/private-chef.rb\n",
 
+          "echo \"bookshelf['vip'] = 's3.amazonaws.com'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/private-chef.rb\n",
           "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
 
           "if [ x", { "Ref" : "NginxCertificate" }, " != x ] && [ x", { "Ref" : "NginxCertificateKey" }, " != x ]; then \n",
