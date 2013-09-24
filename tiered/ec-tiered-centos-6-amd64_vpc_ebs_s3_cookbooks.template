@@ -770,7 +770,6 @@
       "Type" : "AWS::AutoScaling::LaunchConfiguration",
       "Metadata" : {
         "Comment1" : "Configure the bootstrap helpers to install Enterprise Chef front-end servers",
-
         "AWS::CloudFormation::Init" : {
           "config" : {
             "packages" : {
@@ -891,8 +890,20 @@
           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "SourceSecurityGroupId" : { "Ref" : "PublicLoadBalancerSecurityGroup" } } ,
           { "IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" } } ],
         "SecurityGroupEgress" : [
-           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
-           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ]
+           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" },
+           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" }
+        ]
+       }
+    },
+
+    "FrontendToBackendSecurityGroupEgress" : {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": { "Ref": "FrontendSecurityGroup" },
+        "IpProtocol": "tcp",
+        "FromPort": "4321",
+        "ToPort": "9685",
+        "DestinationSecurityGroupId": {"Ref" : "BackendSecurityGroup" }
       }
     },
 
