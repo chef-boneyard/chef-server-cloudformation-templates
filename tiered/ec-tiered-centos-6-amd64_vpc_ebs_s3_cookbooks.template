@@ -706,7 +706,8 @@
       "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
       "Properties" : {
         "SecurityGroups" : [ { "Ref" : "PublicLoadBalancerSecurityGroup" } ],
-        "Subnets" : [ { "Ref" : "PrivateSubnet" } ],
+        "Subnets" : [ { "Ref" : "PublicSubnet" } ],
+        "LBCookieStickinessPolicy" : [ { "PolicyName" : "PublicElasticLoadBalancerStickiness" } ],
         "Listeners" : [           {
             "InstancePort": "443",
             "LoadBalancerPort": "443",
