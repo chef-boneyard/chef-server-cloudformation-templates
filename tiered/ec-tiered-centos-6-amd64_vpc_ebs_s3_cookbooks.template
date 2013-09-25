@@ -1,13 +1,11 @@
 
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
-  
-  "Description" : "AWS CloudFormation Template for a Tiered implementation of Enterprise Chef in a VPC with cookbook storage in S3.",
-  
+  "Description" : "AWS CloudFormation Template for a tiered implementation of Enterprise Chef in a VPC with cookbook storage in S3.",
   "Parameters" : {
       
     "KeyName" : {
-      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Description" : "Name of an existing EC2 keypair to enable SSH access to the instances",
       "Type" : "String",
       "MinLength": "1",
       "MaxLength": "64",
@@ -17,7 +15,7 @@
 
     "ECDownloadURL": {
       "Default": "",
-      "Description" : "Enterprise Chef Download Link",
+      "Description" : "Enterprise Chef download link",
       "Type": "String"
     },
 
@@ -48,7 +46,7 @@
     },
 
     "BackendInstanceType" : {
-      "Description" : "EC2 instance type for the back-end server",
+      "Description" : "EC2 instance type for the backend server",
       "Type" : "String",
       "Default" : "c1.medium",
       "AllowedValues" : [ "m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
@@ -56,7 +54,7 @@
     },
 
     "BastionInstanceType" : {
-      "Description" : "Bastion Host EC2 instance type",
+      "Description" : "Bastion host EC2 instance type",
       "Type" : "String",
       "Default" : "t1.micro",
       "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
@@ -64,7 +62,7 @@
     },
 
     "NATInstanceType" : {
-      "Description" : "NAT Device EC2 instance type",
+      "Description" : "NAT device EC2 instance type",
       "Type" : "String",
       "Default" : "m1.small",
       "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
@@ -707,13 +705,20 @@
       "Properties" : {
         "SecurityGroups" : [ { "Ref" : "PublicLoadBalancerSecurityGroup" } ],
         "Subnets" : [ { "Ref" : "PublicSubnet" } ],
-        "LBCookieStickinessPolicy" : [ { "PolicyName" : "PublicElasticLoadBalancerStickiness" } ],
-        "Listeners" : [           {
+        "LBCookieStickinessPolicy" : [
+          {
+            "PolicyName" : "PublicELBCookieStickinessPolicy",
+            "CookieExpirationPeriod" : "3600"
+          }
+        ],
+        "Listeners" : [
+          {
             "InstancePort": "443",
             "LoadBalancerPort": "443",
             "InstanceProtocol": "HTTPS",
             "Protocol": "HTTPS",
-            "SSLCertificateId": { "Ref": "SSLCertificateARN" }
+            "SSLCertificateId": { "Ref": "SSLCertificateARN" },
+            "PolicyNames" : [ "PublicELBCookieStickinessPolicy" ]
           },
           { 
             "LoadBalancerPort" : "80",
@@ -861,7 +866,7 @@
           "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_pub.pem /etc/opscode/webui_pub.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
           "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-private.pem /etc/opscode/worker-private.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
           "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-public.pem /etc/opscode/worker-public.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/private-chef-secrets.json /etc/opscode/private-chef-secrets.json >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/private-chef-secrets.json /etc/opscode/private-chef-secrets.json >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server secrets'\n",
 
           "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
