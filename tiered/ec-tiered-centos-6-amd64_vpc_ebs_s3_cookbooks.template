@@ -742,6 +742,7 @@
 
     "FrontendFleet" : {
       "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "DependsOn": "BackendWaitCondition",
       "Properties" : {
         "AvailabilityZones" : [{ "Fn::GetAtt" : [ "PrivateSubnet", "AvailabilityZone" ] }],
         "VPCZoneIdentifier" : [{ "Ref" : "PrivateSubnet" }],
