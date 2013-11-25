@@ -612,7 +612,7 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download the Enterprise Chef installer\n",
-          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "wget --no-check-certificate \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
           "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm || error_exit 'Failed to install Chef Server'\n",
 
           "## Generate /etc/opscode/private-chef.rb\n",
@@ -834,7 +834,7 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download the Enterprise Chef installer\n",
-          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "wget --no-check-certificate \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
           "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
 
           "## Generate /etc/opscode/private-chef.rb\n",
