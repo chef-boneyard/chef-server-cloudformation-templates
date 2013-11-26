@@ -194,8 +194,8 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download the Enterprise Chef installer\n",
-          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.rpm\n",
+          "yum -y install /tmp/private-chef.rpm\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
