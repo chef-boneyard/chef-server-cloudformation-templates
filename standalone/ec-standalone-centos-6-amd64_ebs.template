@@ -135,8 +135,6 @@
           "}\n",
 
           "PUBLIC_DNS=`(curl http://169.254.169.254/latest/meta-data/public-hostname)`\n",
-          "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
-          "SHORTNAME=`(echo $PUBLIC_DNS | cut -d \".\" -f1)`\n",
           "export HOME=\/root\n",
           "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
           "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
@@ -150,9 +148,10 @@
           "## Download the Enterprise Chef installer\n",
           "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
           "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "hostname $SHORTNAME\n",
-          "echo $PUBLIC_DNS | tee /etc/hostname\n",
-          "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
+
+          "mkdir /etc/opscode\n",
+          "echo \"api_fqdn '$PUBLIC_DNS'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['vip'] = '$PUBLIC_DNS'\" >> /etc/opscode/private-chef.rb\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# If all went well, signal success\n",
