@@ -171,7 +171,7 @@
                   "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
                   "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
                   "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n",
-                  "opscode_webui['enable']" = false \n"
+                  "opscode_webui['enable'] = false \n"
                 ]]},
                 "mode" : "000644",
                 "owner": "root",
@@ -221,7 +221,7 @@
           "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.rpm\n",
           "yum -y install /tmp/private-chef.rpm\n",
           "## Download the Enterprice Chef Management Console installer\n",
-          "wget '", { "Ref": "MCDownloadURL" }"' -O /tmp/management-console.rpm\n",
+          "wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm\n",
           "yum -y install /tmp/management-console.rpm\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",

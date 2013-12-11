@@ -167,13 +167,13 @@
                   "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
                   "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
                   "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n",
-                  "opscode_webui['enable']" = false \n"
+                  "opscode_webui['enable'] = false \n"
                 ]]},
                 "mode" : "000644",
                 "owner": "root",
                 "group": "root"
               }
-            },
+            }
           }
         }
       },
