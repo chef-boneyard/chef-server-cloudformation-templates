@@ -2,7 +2,7 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using Ubuntu 10.04.",
+  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using Ubuntu 10.04 that stores cookbooks in S3.",
 
   "Parameters" : {
 
@@ -115,6 +115,38 @@
       }
     },
 
+    "CookbooksBucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl" : "Private"
+      }
+    },
+
+    "CookbooksBucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "PolicyDocument": {
+          "Version"      : "2008-10-17",
+          "Id"           : "CookbooksWritePolicy",
+          "Statement"    : [
+            {
+              "Action"     : ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"} , "/*"]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
+            },
+            {
+              "Action"     : ["s3:ListBucket"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"}]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
+            }
+          ]
+        },
+        "Bucket" : {"Ref" : "CookbooksBucket"}
+      }
+    },
+
     "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
@@ -127,7 +159,21 @@
                 "ntp"      : [],
                 "git-core" : []
               }
-            }
+            },
+            "files": {
+              "/etc/opscode/private-chef.rb" : {
+                "content": { "Fn::Join" : ["", [
+                  "bookshelf['vip'] = 's3.amazonaws.com'\n",
+                  "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
+                  "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
+                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n",
+                  "opscode_webui['enable']" = false \n"
+                ]]},
+                "mode" : "000644",
+                "owner": "root",
+                "group": "root"
+              }
+            },
           }
         }
       },
