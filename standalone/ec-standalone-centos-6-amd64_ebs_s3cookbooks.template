@@ -1,11 +1,11 @@
 
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
-  
-  "Description" : "Creates a standalone Opscode Enterprise Chef (EC) 11 server that will store its cookbooks in an S3 bucket.",
-  
+
+  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using CentOS 6 that stores cookbooks in S3.",
+
   "Parameters" : {
-      
+
     "KeyName" : {
       "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
       "Type" : "String",
@@ -13,19 +13,42 @@
       "MaxLength": "64",
       "AllowedPattern" : "[-_ a-zA-Z0-9]*",
       "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
-    },    
+    },
 
     "ECDownloadURL": {
       "Default": "",
-      "Description" : "Enterprise Chef Download Link",
+      "Description" : "URL to Enterprise Chef RPM",
+      "Type": "String"
+    },
+
+    "MCDownloadURL": {
+      "Default": "",
+      "Description" : "URL to Management Console RPM",
       "Type": "String"
     },
 
     "InstanceType" : {
       "Description" : "EC2 instance type",
       "Type" : "String",
-      "Default" : "c1.medium",
-      "AllowedValues" : [ "m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
+      "Default" : "c3.xlarge",
+      "AllowedValues" : [
+        "m1.xlarge",
+        "m2.2xlarge",
+        "m2.4xlarge",
+        "m3.xlarge",
+        "m3.2xlarge",
+        "c1.xlarge",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge",
+        "c3.8xlarge",
+        "cc2.8xlarge",
+        "g2.2xlarge",
+        "cg1.4xlarge",
+        "cr1.8xlarge",
+        "hi1.4xlarge",
+        "hs1.8xlarge"
+      ],
       "ConstraintDescription" : "must be a valid EC2 instance type with at least 4 vCPU and 4GB of RAM."
     },
 
@@ -39,21 +62,21 @@
       "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
     }
   },
-  
+
   "Mappings" : {
     "AWSInstanceType2Arch" : {
-      "m1.large"    : { "Arch" : "64" },
-      "m1.xlarge"   : { "Arch" : "64" },
-      "m2.xlarge"   : { "Arch" : "64" },
-      "m2.2xlarge"  : { "Arch" : "64" },
-      "m2.4xlarge"  : { "Arch" : "64" },
-      "m3.xlarge"   : { "Arch" : "64" },
-      "m3.2xlarge"  : { "Arch" : "64" },
-      "c1.medium"   : { "Arch" : "64" },
-      "c1.xlarge"   : { "Arch" : "64" },
-      "cc1.4xlarge" : { "Arch" : "64HVM" },
-      "cc2.8xlarge" : { "Arch" : "64HVM" },
-      "cg1.4xlarge" : { "Arch" : "64HVM" }
+      "m1.xlarge"   : { "Arch" : "PV64" },
+      "m3.xlarge"   : { "Arch" : "PV64" },
+      "m3.2xlarge"  : { "Arch" : "PV64" },
+      "m2.xlarge"   : { "Arch" : "PV64" },
+      "m2.2xlarge"  : { "Arch" : "PV64" },
+      "m2.4xlarge"  : { "Arch" : "PV64" },
+      "c1.xlarge"   : { "Arch" : "PV64" },
+      "cc1.4xlarge" : { "Arch" : "CLU64" },
+      "cc2.8xlarge" : { "Arch" : "CLU64" },
+      "cg1.4xlarge" : { "Arch" : "GPU64" },
+      "hi1.4xlarge" : { "Arch" : "PV64" },
+      "hs1.8xlarge" : { "Arch" : "PV64" }
     },
 
     "AWSRegionArch2AMI" : {
@@ -68,8 +91,8 @@
     }
 
   },
-    
-  "Resources" : {     
+
+  "Resources" : {
 
     "CfnUser" : {
       "Type" : "AWS::IAM::User",
@@ -117,15 +140,15 @@
               "Action"     : ["s3:ListBucket"],
               "Effect"     : "Allow",
               "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"}]]},
-              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }              
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
             }
           ]
         },
         "Bucket" : {"Ref" : "CookbooksBucket"}
       }
     },
-      
-    "ChefServer": {  
+
+    "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
         "Comment1" : "Configure the bootstrap helpers to install Enterprise Chef",
@@ -147,7 +170,8 @@
                   "bookshelf['vip'] = 's3.amazonaws.com'\n",
                   "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
                   "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
-                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n"
+                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n",
+                  "opscode_webui['enable'] = false \n"
                 ]]},
                 "mode" : "000644",
                 "owner": "root",
@@ -196,14 +220,18 @@
           "## Download the Enterprise Chef installer\n",
           "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.rpm\n",
           "yum -y install /tmp/private-chef.rpm\n",
+          "## Download the Enterprice Chef Management Console installer\n",
+          "wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm\n",
+          "yum -y install /tmp/management-console.rpm\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
+          "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "WaitHandle" }, "'\n"
-        ]]}}        
+        ]]}}
       }
     },
 
@@ -219,7 +247,7 @@
         "Timeout" : "600"
       }
     },
-    
+
     "ChefServerSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
@@ -229,14 +257,14 @@
           {"IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"},
           {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}}
         ]
-      }      
-    }          
+      }
+    }
   },
-  
+
   "Outputs" : {
     "ChefServerURL" : {
       "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "ChefServer", "PublicDnsName" ]}]] },
-      "Description" : "URL for newly Enterprise Chef server"
+      "Description" : "URL for newly created Enterprise Chef server"
     }
   }
 }

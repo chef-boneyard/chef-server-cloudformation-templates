@@ -1,11 +1,11 @@
 
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
-  
-  "Description" : "AWS CloudFormation Template for a Standalone implementation of Enterprise Chef. This template creates an Enterprise Chef (EC) server using a single EC2 instance with a bootstrap script that will install the packages and files necessary to have a fully functioning EC server after providing the download URL. **WARNING** This template creates an Amazon EC2 instance. You will be billed for the AWS resources used if you create a stack from this template.",
-  
+
+  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using Ubuntu 10.04.",
+
   "Parameters" : {
-      
+
     "KeyName" : {
       "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
       "Type" : "String",
@@ -13,19 +13,42 @@
       "MaxLength": "64",
       "AllowedPattern" : "[-_ a-zA-Z0-9]*",
       "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
-    },    
+    },
 
     "ECDownloadURL": {
       "Default": "",
-      "Description" : "Enterprise Chef Download Link",
+      "Description" : "URL to Enterprise Chef DEB",
+      "Type": "String"
+    },
+
+    "MCDownloadURL": {
+      "Default": "",
+      "Description" : "URL to Management Console DEB",
       "Type": "String"
     },
 
     "InstanceType" : {
       "Description" : "EC2 instance type",
       "Type" : "String",
-      "Default" : "c1.medium",
-      "AllowedValues" : [ "m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","cc1.4xlarge","cc2.8xlarge","cg1.4xlarge"],
+      "Default" : "c3.xlarge",
+      "AllowedValues" : [
+        "m1.xlarge",
+        "m2.2xlarge",
+        "m2.4xlarge",
+        "m3.xlarge",
+        "m3.2xlarge",
+        "c1.xlarge",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge",
+        "c3.8xlarge",
+        "cc2.8xlarge",
+        "g2.2xlarge",
+        "cg1.4xlarge",
+        "cr1.8xlarge",
+        "hi1.4xlarge",
+        "hs1.8xlarge"
+      ],
       "ConstraintDescription" : "must be a valid EC2 instance type with at least 4 vCPU and 4GB of RAM."
     },
 
@@ -39,7 +62,7 @@
       "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
     }
   },
-  
+
   "Mappings" : {
     "AWSInstanceType2Arch" : {
       "m1.large"    : { "Arch" : "64" },
@@ -67,8 +90,8 @@
       "sa-east-1"      : { "32" : "ami-822c899f", "64" : "ami-bc2c89a1", "64HVM" : "NOT_YET_SUPPORTED" }
     }
   },
-    
-  "Resources" : {     
+
+  "Resources" : {
 
     "CfnUser" : {
       "Type" : "AWS::IAM::User",
@@ -91,8 +114,8 @@
         "UserName" : { "Ref" : "CfnUser" }
       }
     },
-      
-    "ChefServer": {  
+
+    "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
         "Comment1" : "Configure the bootstrap helpers to install Enterprise Chef",
@@ -135,17 +158,21 @@
           "         --secret-key ", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]},
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
-          "## Download the Enterprice Chef installer\n",
-          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef.ubuntu.10.04_amd64.deb\n",
-          "dpkg -i /tmp/private-chef.ubuntu.10.04_amd64.deb\n",
+          "## Download the Enterprise Chef installer\n",
+          "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.deb\n",
+          "dpkg -i /tmp/private-chef.deb\n",
+          "## Download the Management Console installer\n",
+          "wget '", { "Ref" : "MCDownloadURL" }, "' -O /tmp/management-console.deb\n",
+          "dpkg -i /tmp/management-console.deb\n",
           "hostname $SHORTNAME \n",
           "echo $PUBLIC_DNS | sudo tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
+          "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "WaitHandle" }, "'\n"
-        ]]}}        
+        ]]}}
       }
     },
 
@@ -161,7 +188,7 @@
         "Timeout" : "600"
       }
     },
-    
+
     "ChefServerSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
@@ -171,10 +198,10 @@
           {"IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"},
           {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}}
         ]
-      }      
-    }          
+      }
+    }
   },
-  
+
   "Outputs" : {
     "ChefServerURL" : {
       "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "ChefServer", "PublicDnsName" ]}]] },

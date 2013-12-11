@@ -1,7 +1,8 @@
+
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using CentOS 6.",
+  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using Ubuntu 10.04 that stores cookbooks in S3.",
 
   "Parameters" : {
 
@@ -16,13 +17,13 @@
 
     "ECDownloadURL": {
       "Default": "",
-      "Description" : "Link to Enterprise Chef RPM",
+      "Description" : "URL to Enterprise Chef DEB",
       "Type": "String"
     },
 
     "MCDownloadURL": {
       "Default": "",
-      "Description" : "Link to Management Console RPM",
+      "Description" : "URL to Management Console DEB",
       "Type": "String"
     },
 
@@ -64,29 +65,29 @@
 
   "Mappings" : {
     "AWSInstanceType2Arch" : {
-      "m1.xlarge"   : { "Arch" : "PV64" },
-      "m3.xlarge"   : { "Arch" : "PV64" },
-      "m3.2xlarge"  : { "Arch" : "PV64" },
-      "m2.xlarge"   : { "Arch" : "PV64" },
-      "m2.2xlarge"  : { "Arch" : "PV64" },
-      "m2.4xlarge"  : { "Arch" : "PV64" },
-      "c1.xlarge"   : { "Arch" : "PV64" },
-      "cc1.4xlarge" : { "Arch" : "CLU64" },
-      "cc2.8xlarge" : { "Arch" : "CLU64" },
-      "cg1.4xlarge" : { "Arch" : "GPU64" },
-      "hi1.4xlarge" : { "Arch" : "PV64" },
-      "hs1.8xlarge" : { "Arch" : "PV64" }
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "m3.xlarge"   : { "Arch" : "64" },
+      "m3.2xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64HVM" },
+      "cc2.8xlarge" : { "Arch" : "64HVM" },
+      "cg1.4xlarge" : { "Arch" : "64HVM" }
     },
 
     "AWSRegionArch2AMI" : {
-      "us-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-52009e3b", "64HVM" : "ami-eec75e87" },
-      "us-west-2"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-e030a5d0", "64HVM" : "ami-503bae60" },
-      "us-west-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-0a2f024f", "64HVM" : "NOT_YET_SUPPORTED" },
-      "eu-west-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-8aa3a8fe", "64HVM" : "ami-e4b5be90" },
-      "ap-southeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-0c034f5e", "64HVM" : "NOT_YET_SUPPORTED" },
-      "ap-southeast-2" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-f261f0c8", "64HVM" : "NOT_YET_SUPPORTED" },
-      "ap-northeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-651a9b64", "64HVM" : "NOT_YET_SUPPORTED" },
-      "sa-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-b32cf7ae", "64HVM" : "NOT_YET_SUPPORTED" }
+      "us-east-1"      : { "32" : "ami-8aadd0e3", "64" : "ami-8eadd0e7", "64HVM" : "NOT_YET_SUPPORTED" },
+      "us-west-2"      : { "32" : "ami-8d9b08bd", "64" : "ami-f19b08c1", "64HVM" : "NOT_YET_SUPPORTED" },
+      "us-west-1"      : { "32" : "ami-5a8aa31f", "64" : "ami-648aa321", "64HVM" : "NOT_YET_SUPPORTED" },
+      "eu-west-1"      : { "32" : "ami-55afb221", "64" : "ami-57afb223", "64HVM" : "NOT_YET_SUPPORTED" },
+      "ap-southeast-1" : { "32" : "ami-3871386a", "64" : "ami-3e71386c", "64HVM" : "NOT_YET_SUPPORTED" },
+      "ap-southeast-2" : { "32" : "ami-29009313", "64" : "ami-2f009315", "64HVM" : "NOT_YET_SUPPORTED" },
+      "ap-northeast-1" : { "32" : "ami-2b21b42a", "64" : "ami-2d21b42c", "64HVM" : "NOT_YET_SUPPORTED" },
+      "sa-east-1"      : { "32" : "ami-822c899f", "64" : "ami-bc2c89a1", "64HVM" : "NOT_YET_SUPPORTED" }
     }
   },
 
@@ -114,6 +115,38 @@
       }
     },
 
+    "CookbooksBucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl" : "Private"
+      }
+    },
+
+    "CookbooksBucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "PolicyDocument": {
+          "Version"      : "2008-10-17",
+          "Id"           : "CookbooksWritePolicy",
+          "Statement"    : [
+            {
+              "Action"     : ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"} , "/*"]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
+            },
+            {
+              "Action"     : ["s3:ListBucket"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"}]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
+            }
+          ]
+        },
+        "Bucket" : {"Ref" : "CookbooksBucket"}
+      }
+    },
+
     "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
@@ -122,30 +155,23 @@
         "AWS::CloudFormation::Init" : {
           "config" : {
             "packages" : {
-              "yum" : {
+              "apt" : {
                 "ntp"      : [],
-                "crontabs" : [],
-                "git"      : [],
-                "freetype" : [],
-                "libpng"   : []
+                "git-core" : []
               }
             },
             "files": {
               "/etc/opscode/private-chef.rb" : {
                 "content": { "Fn::Join" : ["", [
+                  "bookshelf['vip'] = 's3.amazonaws.com'\n",
+                  "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
+                  "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
+                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n",
                   "opscode_webui['enable'] = false \n"
                 ]]},
                 "mode" : "000644",
                 "owner": "root",
                 "group": "root"
-              }
-            },
-            "services": {
-              "sysvinit": {
-                "ntpd": {
-                  "enabled" : "true",
-                  "ensureRunning" : "true"
-                }
               }
             }
           }
@@ -170,9 +196,8 @@
           "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
           "SHORTNAME=`(echo $PUBLIC_DNS | cut -d \".\" -f1)`\n",
           "export HOME=\/root\n",
-          "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
-          "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
-          "export PATH=$PATH:/opt/aws/bin\n",
+          "apt-get -y install python-setuptools\n",
+          "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
           "cfn-init --region ", { "Ref" : "AWS::Region" },
           "    -v -s ", { "Ref" : "AWS::StackName" }, " -r ChefServer ",
           "         --access-key ", { "Ref" : "AccessKey" },
@@ -180,13 +205,13 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download the Enterprise Chef installer\n",
-          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "## Download the Enterprice Chef Management Console installer\n",
-          "wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm\n",
-          "yum -y install /tmp/management-console.rpm\n",
-          "hostname $SHORTNAME\n",
-          "echo $PUBLIC_DNS | tee /etc/hostname\n",
+          "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.deb\n",
+          "dpkg -i /tmp/private-chef.deb\n",
+          "## Download the Management Console installer\n",
+          "wget '", { "Ref" : "MCDownloadURL" }, "' -O /tmp/management-console.deb\n",
+          "dpkg -i /tmp/management-console.deb\n",
+          "hostname $SHORTNAME \n",
+          "echo $PUBLIC_DNS | sudo tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
           "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
