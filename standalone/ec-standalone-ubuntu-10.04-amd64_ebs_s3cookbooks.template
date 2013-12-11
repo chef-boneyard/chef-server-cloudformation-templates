@@ -27,6 +27,12 @@
       "Type": "String"
     },
 
+    "RepDownloadURL": {
+      "Default": "",
+      "Description" : "URL to Reporting DEB",
+      "Type": "String"
+    },
+
     "InstanceType" : {
       "Description" : "EC2 instance type",
       "Type" : "String",
@@ -210,11 +216,16 @@
           "## Download the Management Console installer\n",
           "wget '", { "Ref" : "MCDownloadURL" }, "' -O /tmp/management-console.deb\n",
           "dpkg -i /tmp/management-console.deb\n",
+          "## Download the Reporting installer\n",
+          "wget '", { "Ref" : "MCDownloadURL" }, "' -O /tmp/chef-reporting.deb\n",
+          "dpkg -i /tmp/chef-reporting.deb\n",
           "hostname $SHORTNAME \n",
           "echo $PUBLIC_DNS | sudo tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
           "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
+          "opscode-reporting-ctl reconfigure >> /var/log/reporting-install.log\n",
+          "private-chef-ctl restart opscode-reporting\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "WaitHandle" }, "'\n"

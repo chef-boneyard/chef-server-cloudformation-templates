@@ -16,13 +16,19 @@
 
     "ECDownloadURL": {
       "Default": "",
-      "Description" : "Link to Enterprise Chef RPM",
+      "Description" : "URL to Enterprise Chef RPM",
       "Type": "String"
     },
 
     "MCDownloadURL": {
       "Default": "",
-      "Description" : "Link to Management Console RPM",
+      "Description" : "URL to Management Console RPM",
+      "Type": "String"
+    },
+
+    "RepDownloadURL": {
+      "Default": "",
+      "Description" : "URL to Reporting RPM",
       "Type": "String"
     },
 
@@ -180,16 +186,21 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download the Enterprise Chef installer\n",
-          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "## Download the Enterprice Chef Management Console installer\n",
+          "wget \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/enterprise-chef.rpm\n",
+          "yum -y install /tmp/enterprise-chef.rpm\n",
+          "## Download the Enterprise Chef Management Console installer\n",
           "wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm\n",
           "yum -y install /tmp/management-console.rpm\n",
+          "## Download the Enterprise Chef Reporting installer\n",
+          "wget '", { "Ref": "RepDownloadURL" }, "' -O /tmp/chef-reporting.rpm\n",
+          "yum -y install /tmp/chef-reporting.rpm\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
           "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
+          "opscode-reporting-ctl reconfigure >> /var/log/reporting-install.log\n",
+          "private-chef-ctl restart opscode-reporting\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "WaitHandle" }, "'\n"
