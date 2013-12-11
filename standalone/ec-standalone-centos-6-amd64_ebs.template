@@ -31,6 +31,12 @@
       "Description" : "URL to Reporting RPM",
       "Type": "String"
     },
+    
+    "PushDownloadURL": {
+      "Default": "",
+      "Description" : "URL to Push Jobs RPM",
+      "Type": "String"
+    },
 
     "InstanceType" : {
       "Description" : "EC2 instance type",
@@ -194,12 +200,17 @@
           "## Download the Enterprise Chef Reporting installer\n",
           "wget '", { "Ref": "RepDownloadURL" }, "' -O /tmp/chef-reporting.rpm\n",
           "yum -y install /tmp/chef-reporting.rpm\n",
+          "## Download the Enterprise Chef Push Jobs installer\n",
+          "wget '", { "Ref": "PushDownloadURL" }, "' -O /tmp/chef-pushjobs.rpm\n",
+          "yum -y install /tmp/chef-pushjobs.rpm\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
           "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
           "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
           "opscode-reporting-ctl reconfigure >> /var/log/reporting-install.log\n",
+          "opscode-push-jobs-server-ctl reconfigure >> /var/log/pushjobs-install.log\n",
+          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
           "private-chef-ctl restart opscode-reporting\n",
 
           "# If all went well, signal success\n",
