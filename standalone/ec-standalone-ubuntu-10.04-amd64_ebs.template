@@ -1,8 +1,7 @@
-
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using Ubuntu 10.04.",
+  "Description" : "Standalone Enterprise Chef (EC) 11 server on Ubuntu 10.04.",
 
   "Parameters" : {
 
@@ -16,27 +15,42 @@
     },
 
     "ECDownloadURL": {
-      "Default": "",
       "Description" : "URL to Enterprise Chef DEB",
-      "Type": "String"
+      "Type": "String",
+      "AllowedPattern" : "http:\/\/[a-z0-9-_.\/]+(.deb).*",
+      "ConstraintDescription" : "must be a remotely hosted (http://) hosted .deb file."
     },
 
     "MCDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Management Console DEB",
-      "Type": "String"
+      "Description" : "URL to Enterprise Chef Management Console DEB",
+      "Type": "String",
+      "Default": "NULL",
+      "AllowedPattern" : "(NULL|http:\/\/[a-z0-9-_.\/]+(.deb).*)",
+      "ConstraintDescription" : "must be a remotely hosted (http://) hosted .deb file."
     },
 
     "RepDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Reporting DEB",
-      "Type": "String"
+      "Description" : "URL to Enterprise Chef Reporting DEB",
+      "Type": "String",
+      "Default": "NULL",
+      "AllowedPattern" : "(NULL|http:\/\/[a-z0-9-_.\/]+(.deb).*)",
+      "ConstraintDescription" : "must be a remotely hosted (http://) hosted .deb file."
     },
 
     "PushDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Push Jobs DEB",
-      "Type": "String"
+      "Description" : "URL to Enterprise Chef Push Jobs DEB",
+      "Type": "String",
+      "Default": "NULL",
+      "AllowedPattern" : "(NULL|http:\/\/[a-z0-9-_.\/]+(.deb).*)",
+      "ConstraintDescription" : "must be a remotely hosted (http://) hosted .deb file."
+    },
+
+    "S3Bookshelf" : {
+      "Default" : "true",
+      "Description" : "Should the Bookshelf be stored on S3?",
+      "Type" : "String",
+      "AllowedValues" : ["true","false"],
+      "ConstraintDescription" : "must be true or false."
     },
 
     "InstanceType" : {
@@ -53,13 +67,7 @@
         "c3.xlarge",
         "c3.2xlarge",
         "c3.4xlarge",
-        "c3.8xlarge",
-        "cc2.8xlarge",
-        "g2.2xlarge",
-        "cg1.4xlarge",
-        "cr1.8xlarge",
-        "hi1.4xlarge",
-        "hs1.8xlarge"
+        "c3.8xlarge"
       ],
       "ConstraintDescription" : "must be a valid EC2 instance type with at least 4 vCPU and 4GB of RAM."
     },
@@ -77,18 +85,17 @@
 
   "Mappings" : {
     "AWSInstanceType2Arch" : {
-      "m1.large"    : { "Arch" : "64" },
       "m1.xlarge"   : { "Arch" : "64" },
+      "m3.xlarge"   : { "Arch" : "64" },
+      "m3.2xlarge"  : { "Arch" : "64" },
       "m2.xlarge"   : { "Arch" : "64" },
       "m2.2xlarge"  : { "Arch" : "64" },
       "m2.4xlarge"  : { "Arch" : "64" },
-      "m3.xlarge"   : { "Arch" : "64" },
-      "m3.2xlarge"  : { "Arch" : "64" },
-      "c1.medium"   : { "Arch" : "64" },
       "c1.xlarge"   : { "Arch" : "64" },
-      "cc1.4xlarge" : { "Arch" : "64HVM" },
-      "cc2.8xlarge" : { "Arch" : "64HVM" },
-      "cg1.4xlarge" : { "Arch" : "64HVM" }
+      "c3.xlarge"   : { "Arch" : "64" },
+      "c3.2xlarge"  : { "Arch" : "64" },
+      "c3.4xlarge"  : { "Arch" : "64" },
+      "c3.8xlarge"  : { "Arch" : "64" }
     },
 
     "AWSRegionArch2AMI" : {
@@ -102,6 +109,14 @@
       "sa-east-1"      : { "32" : "ami-822c899f", "64" : "ami-bc2c89a1", "64HVM" : "NOT_YET_SUPPORTED" }
     }
   },
+
+  "Conditions" : {
+    "S3BackedBookshelf" : { "Fn::Equals" : [{ "Ref" : "S3Bookshelf" }, "true"] },
+    "InstallMgmtConsole" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "MCDownloadURL" }, "NULL" ]}]},
+    "InstallReporting" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "RepDownloadURL" }, "NULL" ]}]},
+    "InstallPushJobs" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "PushDownloadURL" }, "NULL" ]}]}
+  },
+  
 
   "Resources" : {
 
@@ -127,6 +142,40 @@
       }
     },
 
+    "CookbooksBucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Condition" : "S3BackedBookshelf",
+      "Properties" : {
+        "AccessControl" : "Private"
+      }
+    },
+
+    "CookbooksBucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Condition" : "S3BackedBookshelf",
+      "Properties" : {
+        "PolicyDocument": {
+          "Version"      : "2008-10-17",
+          "Id"           : "CookbooksWritePolicy",
+          "Statement"    : [
+            {
+              "Action"     : ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"} , "/*"]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
+            },
+            {
+              "Action"     : ["s3:ListBucket"],
+              "Effect"     : "Allow",
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "CookbooksBucket"}]]},
+              "Principal"  : { "AWS": {"Fn::GetAtt" : ["CfnUser", "Arn"]} }
+            }
+          ]
+        },
+        "Bucket" : {"Ref" : "CookbooksBucket"}
+      }
+    },
+
     "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
@@ -134,10 +183,47 @@
 
         "AWS::CloudFormation::Init" : {
           "config" : {
-            "packages" : {
-              "apt" : {
-                "ntp"      : [],
-                "git-core" : []
+            "yum" : {
+              "ntp"      : [],
+              "crontabs" : [],
+              "git"      : [],
+              "freetype" : [],
+              "libpng"   : []
+            },
+            "files": {
+              "/etc/opscode/private-chef.rb" : {
+                "content": { "Fn::Join" : ["", [
+                  {
+                    "Fn::If" : [
+                      "S3BackedBookshelf",
+                      { "Fn::Join" : [ "", [
+                        "bookshelf['vip'] = 's3.amazonaws.com'\n",
+                        "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
+                        "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
+                        "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n"
+                      ]]},
+                      ""
+                    ]
+                  },
+                  {
+                    "Fn::If" : [
+                      "InstallMgmtConsole",
+                      "opscode_webui['enable'] = false\n",
+                      ""
+                    ]
+                  }
+                ]]},
+                "mode" : "000644",
+                "owner": "root",
+                "group": "root"
+              }
+            }
+          },
+          "services": {
+            "sysvinit": {
+              "ntpd": {
+                "enabled" : "true",
+                "ensureRunning" : "true"
               }
             }
           }
@@ -149,6 +235,12 @@
         "InstanceType"   : { "Ref" : "InstanceType" },
         "SecurityGroups" : [ {"Ref" : "ChefServerSecurityGroup"} ],
         "KeyName"        : { "Ref" : "KeyName" },
+        "BlockDeviceMappings" : [
+          {
+            "DeviceName" : "/dev/sda",
+            "Ebs" : { "VolumeSize" : "50" }
+          }
+        ],
         "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
           "#!/bin/bash -v\n",
 
@@ -158,42 +250,85 @@
           "  exit 1\n",
           "}\n",
 
+          "resize2fs /dev/sda || error_exit 'Could not resize root volume'\n",
+
           "PUBLIC_DNS=`(curl http://169.254.169.254/latest/meta-data/public-hostname)`\n",
           "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
           "SHORTNAME=`(echo $PUBLIC_DNS | cut -d \".\" -f1)`\n",
           "export HOME=\/root\n",
           "apt-get -y install python-setuptools\n",
           "easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+
           "cfn-init --region ", { "Ref" : "AWS::Region" },
           "    -v -s ", { "Ref" : "AWS::StackName" }, " -r ChefServer ",
           "         --access-key ", { "Ref" : "AccessKey" },
           "         --secret-key ", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]},
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
-          "## Download the Enterprise Chef installer\n",
-          "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.deb\n",
-          "dpkg -i /tmp/private-chef.deb\n",
-          "## Download the Management Console installer\n",
-          "wget '", { "Ref" : "MCDownloadURL" }, "' -O /tmp/management-console.deb\n",
-          "dpkg -i /tmp/management-console.deb\n",
-          "## Download the Reporting installer\n",
-          "wget '", { "Ref" : "RepDownloadURL" }, "' -O /tmp/chef-reporting.deb\n",
-          "dpkg -i /tmp/chef-reporting.deb\n",
-          "## Download the Push Jobs installer\n",
-          "wget '", { "Ref" : "PushDownloadURL" }, "' -O /tmp/chef-pushjobs.deb\n",
-          "dpkg -i /tmp/chef-pushjobs.deb\n",
-          "hostname $SHORTNAME \n",
-          "echo $PUBLIC_DNS | sudo tee /etc/hostname\n",
-          "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
-          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
-          "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
-          "opscode-reporting-ctl reconfigure >> /var/log/reporting-install.log\n",
-          "opscode-push-jobs-server-ctl reconfigure >> /var/log/pushjobs-install.log\n",
-          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
-          "private-chef-ctl restart opscode-reporting\n",
+
+          "## Download and install Enterprise Chef\n",
+          "wget '", { "Ref": "ECDownloadURL" }, "' -O /tmp/enterprise-chef.deb || error_exit 'Download of Enterprise Chef DEB failed.'\n",
+          "dpkg -i /tmp/enterprise-chef.deb || error_exit 'Installation of Enterprise Chef failed.'\n",
+          "hostname $SHORTNAME\n",
+          "echo $PUBLIC_DNS | tee /etc/hostname\n",
+          "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" | tee -a /etc/hosts\n",
+          "private-chef-ctl reconfigure | tee -a /var/log/enterprise-chef-install.log\n",
+          "if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "   error_exit 'private-chef-ctl reconfigure failed after installing Enterprise Chef core.'\n",
+          "fi\n",
+
+
+          "## Download and install the Enterprise Chef Management Console\n",
+          "if [ '", { "Ref": "MCDownloadURL" }, "' != 'NULL' ]; then\n",
+          "   wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.deb || error_exit 'Download of Enterprise Chef Management Console DEB failed.'\n",
+          "   dpkg -i /tmp/management-console.deb || error_exit 'Installation of Enterprise Chef Management Console DEB failed.'\n",
+          "   private-chef-ctl reconfigure | tee -a /var/log/management-console-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl reconfigure failed after installing Enterprise Chef Management Console.'\n",
+          "   fi\n",
+          "   opscode-manage-ctl reconfigure | tee -a /var/log/management-console-install.log \n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'opscode-manage-ctl reconfigure failed when installing Enterprise Chef Management Console.'\n",
+          "   fi\n",
+          "fi\n",
+
+
+          "## Download and install Enterprise Chef Reporting\n",
+          "if [ '", { "Ref" : "RepDownloadURL" }, "' != 'NULL' ]; then\n",
+          "   wget '", { "Ref": "RepDownloadURL" }, "' -O /tmp/chef-reporting.deb || error_exit 'Download of Enterprise Chef Reporting DEB failed.'\n",
+          "   dpkg -i /tmp/chef-reporting.deb || error_exit 'Installation of Enterprise Chef Reporting DEB failed.'\n",
+          "   opscode-reporting-ctl reconfigure | tee -a /var/log/chef-reporting-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'opscode-reporting-ctl reconfigure failed after installing Enterprise Chef Reporting.'\n",
+          "   fi\n",
+          "   private-chef-ctl restart opscode-reporting | tee -a /var/log/chef-reporting-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl restart opscode-reporting failed after installing Enterprise Chef Reporting.'\n",
+          "   fi\n",
+          "fi\n",
+
+
+          "## Download and install the Enterprise Chef Push Jobs server\n",
+          "if [ '", { "Ref" : "PushDownloadURL" }, "' != 'NULL' ]; then\n",
+          "   wget '", { "Ref": "PushDownloadURL" }, "' -O /tmp/chef-pushjobs.deb || error_exit 'Download of Enterprise Chef Push Jobs DEB failed.'\n",
+          "   dpkg -i /tmp/chef-pushjobs.deb || error_exit 'Installation of Enterprise Chef Push Jobs DEB failed.'\n",
+          "   opscode-push-jobs-server-ctl reconfigure | tee -a /var/log/chef-pushjobs-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'opscode-push-jobs-server-ctl reconfigure failed after installing Enterprise Chef Push Jobs server.'\n",
+          "   fi\n",
+          "   private-chef-ctl reconfigure | tee -a /var/log/chef-pushjobs-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl reconfigure failed after installing Enterprise Chef Push Jobs server.'\n",
+          "   fi\n",
+          "   private-chef-ctl restart opscode-pushy-server | tee -a /var/log/chef-pushjobs-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl restart opscode-pushy-server failed after installing Enterprise Chef Push Jobs server.'\n",
+          "   fi\n",
+          "fi\n",
+
 
           "# If all went well, signal success\n",
-          "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "WaitHandle" }, "'\n"
+          "cfn-signal -e 0 -r 'Enterprise Chef Server configuration successful' '", { "Ref" : "WaitHandle" }, "'"
         ]]}}
       }
     },
@@ -207,7 +342,7 @@
       "DependsOn" : "ChefServer",
       "Properties" : {
         "Handle" : {"Ref" : "WaitHandle"},
-        "Timeout" : "600"
+        "Timeout" : "1200"
       }
     },
 
@@ -227,7 +362,7 @@
   "Outputs" : {
     "ChefServerURL" : {
       "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "ChefServer", "PublicDnsName" ]}]] },
-      "Description" : "URL for newly created Enterprise Chef server"
+      "Description" : "Enterprise Chef Server URL"
     }
   }
 }

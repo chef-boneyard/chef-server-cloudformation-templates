@@ -1,7 +1,7 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using CentOS 6.",
+  "Description" : "Standalone Enterprise Chef (EC) 11 server on CentOS 6.",
 
   "Parameters" : {
 
@@ -24,21 +24,24 @@
     "MCDownloadURL": {
       "Description" : "URL to Enterprise Chef Management Console RPM",
       "Type": "String",
-      "AllowedPattern" : "http:\/\/[a-z0-9-_.\/]+(.rpm).*",
+      "Default": "NULL",
+      "AllowedPattern" : "(NULL|http:\/\/[a-z0-9-_.\/]+(.rpm).*)",
       "ConstraintDescription" : "must be a remotely hosted (http://) hosted .rpm file."
     },
 
     "RepDownloadURL": {
       "Description" : "URL to Enterprise Chef Reporting RPM",
       "Type": "String",
-      "AllowedPattern" : "http:\/\/[a-z0-9-_.\/]+(.rpm).*",
+      "Default": "NULL",
+      "AllowedPattern" : "(NULL|http:\/\/[a-z0-9-_.\/]+(.rpm).*)",
       "ConstraintDescription" : "must be a remotely hosted (http://) hosted .rpm file."
     },
 
     "PushDownloadURL": {
       "Description" : "URL to Enterprise Chef Push Jobs RPM",
       "Type": "String",
-      "AllowedPattern" : "http:\/\/[a-z0-9-_.\/]+(.rpm).*",
+      "Default": "NULL",
+      "AllowedPattern" : "(NULL|http:\/\/[a-z0-9-_.\/]+(.rpm).*)",
       "ConstraintDescription" : "must be a remotely hosted (http://) hosted .rpm file."
     },
 
@@ -109,10 +112,11 @@
 
   "Conditions" : {
     "S3BackedBookshelf" : { "Fn::Equals" : [{ "Ref" : "S3Bookshelf" }, "true"] },
-    "InstallMgmtConsole" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "MCDownloadURL" }, "" ]}]},
-    "InstallReporting" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "RepDownloadURL" }, "" ]}]},
-    "InstallPushJobs" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "PushDownloadURL" }, "" ]}]}
+    "InstallMgmtConsole" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "MCDownloadURL" }, "NULL" ]}]},
+    "InstallReporting" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "RepDownloadURL" }, "NULL" ]}]},
+    "InstallPushJobs" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "PushDownloadURL" }, "NULL" ]}]}
   },
+  
 
   "Resources" : {
 
@@ -172,40 +176,6 @@
       }
     },
 
-    "OptVolume" : {
-      "Type" : "AWS::EC2::Volume",
-      "Properties" : {
-        "Size": "10",
-        "AvailabilityZone" : { "Fn::GetAtt" : [ "ChefServer", "AvailabilityZone" ]}
-      }
-    },
-
-    "MountOptVolume" : {
-      "Type": "AWS::EC2::VolumeAttachment",
-      "Properties": {
-        "InstanceId" : { "Ref": "ChefServer" },
-        "VolumeId" : { "Ref" : "OptVolume" },
-        "Device" : "/dev/sdj"
-      }
-    },
-
-    "VarVolume" : {
-      "Type" : "AWS::EC2::Volume",
-      "Properties" : {
-        "Size": "10",
-        "AvailabilityZone" : { "Fn::GetAtt" : [ "ChefServer", "AvailabilityZone" ]}
-      }
-    },
-
-    "MountVarVolume" : {
-      "Type": "AWS::EC2::VolumeAttachment",
-      "Properties": {
-        "InstanceId" : { "Ref": "ChefServer" },
-        "VolumeId" : { "Ref" : "VarVolume" },
-        "Device" : "/dev/sdk"
-      }
-    },
-
     "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
@@ -226,11 +196,11 @@
                   {
                     "Fn::If" : [
                       "S3BackedBookshelf",
-                      { "Fn::Join" : [ "\n", [
-                        "bookshelf['vip'] = 's3.amazonaws.com'",
-                        "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'",
-                        "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'",
-                        "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'"
+                      { "Fn::Join" : [ "", [
+                        "bookshelf['vip'] = 's3.amazonaws.com'\n",
+                        "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
+                        "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
+                        "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n"
                       ]]},
                       ""
                     ]
@@ -238,7 +208,7 @@
                   {
                     "Fn::If" : [
                       "InstallMgmtConsole",
-                      "opscode_webui['enable'] = false",
+                      "opscode_webui['enable'] = false\n",
                       ""
                     ]
                   }
@@ -265,28 +235,22 @@
         "InstanceType"   : { "Ref" : "InstanceType" },
         "SecurityGroups" : [ {"Ref" : "ChefServerSecurityGroup"} ],
         "KeyName"        : { "Ref" : "KeyName" },
+        "BlockDeviceMappings" : [
+          {
+            "DeviceName" : "/dev/sda",
+            "Ebs" : { "VolumeSize" : "50" }
+          }
+        ],
         "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
           "#!/bin/bash -v\n",
-
-          "## Mount /opt/opscode\n",
-          "fdisk /dev/sdj\n",
-          "mkfs.ext3 /dev/sdj1\n",
-          "mkdir -p /opt/opscode\n",
-          "mount -t ext3 /dev/sdj1 /opt/opscode\n",
-          "echo '/dev/sdj1   /opt/opscode   ext3   defaults  0 0' | tee -a /etc/fstab\n",
-
-          "## Mount /var/opscode\n",
-          "fdisk /dev/sdk\n",
-          "mkfs.ext3 /dev/sdk1\n",
-          "mkdir -p /var/opscode\n",
-          "mount -t ext3 /dev/sdk1 /var/opscode\n",
-          "echo '/dev/sdk1   /var/opscode   ext3   defaults  0 0' | tee -a /etc/fstab\n",
 
           "function error_exit\n",
           "{\n",
           "  cfn-signal -e 1 -r \"$1\" '", { "Ref" : "WaitHandle" }, "'\n",
           "  exit 1\n",
           "}\n",
+
+          "resize2fs /dev/sda || error_exit 'Could not resize root volume'\n",
 
           "PUBLIC_DNS=`(curl http://169.254.169.254/latest/meta-data/public-hostname)`\n",
           "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
@@ -295,76 +259,74 @@
           "yum -y install https://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm\n",
           "yum -y install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm\n",
           "export PATH=$PATH:/opt/aws/bin\n",
+
           "cfn-init --region ", { "Ref" : "AWS::Region" },
-          "    -v -s ", { "Ref" : "AWS::StackName" }, " -r ChefServer \n",
+          "    -v -s ", { "Ref" : "AWS::StackName" }, " -r ChefServer ",
           "         --access-key ", { "Ref" : "AccessKey" },
           "         --secret-key ", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]},
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
+
           "## Download and install Enterprise Chef\n",
-          "wget '", { "Ref": "ECDownloadURL" }, "' -O /tmp/enterprise-chef.rpm\n",
-          "if [ $? -ne 0 ]; then\n",
-          "   error_exit('Download of Enterprise Chef RPM failed.')\n",
-          "else\n",
-          "   yum -y install /tmp/enterprise-chef.rpm\n",
-          "   if [ $? -ne 0 ]; then\n",
-          "      error_exit('RPM installation of Enterprise Chef failed.')\n",
-          "   else\n",
-          "      hostname $SHORTNAME\n",
-          "      echo $PUBLIC_DNS | tee /etc/hostname\n",
-          "      echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
-          "      private-chef-ctl reconfigure >> /var/log/enterprise-chef-install.log\n",
-          "   fi\n",
+          "wget '", { "Ref": "ECDownloadURL" }, "' -O /tmp/enterprise-chef.rpm || error_exit 'Download of Enterprise Chef RPM failed.'\n",
+          "yum -y install /tmp/enterprise-chef.rpm || error_exit 'Installation of Enterprise Chef failed.'\n",
+          "hostname $SHORTNAME\n",
+          "echo $PUBLIC_DNS | tee /etc/hostname\n",
+          "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" | tee -a /etc/hosts\n",
+          "private-chef-ctl reconfigure | tee -a /var/log/enterprise-chef-install.log\n",
+          "if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "   error_exit 'private-chef-ctl reconfigure failed after installing Enterprise Chef core.'\n",
           "fi\n",
+
 
           "## Download and install the Enterprise Chef Management Console\n",
-          "if [ '", { "Ref": "MCDownloadURL" }, "' -ne '' ]; then\n",
-          "   wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm\n",
-          "   if [ $? -ne 0 ]; then\n",
-          "      error_exit('Download of Enterprise Chef Management Console RPM failed')\n",
-          "   else \n",
-          "      yum -y install /tmp/management-console.rpm\n",
-          "      if [ $? -ne 0 ]; then\n",
-          "         error_exit('RPM installation of Enterprise Chef Management Console failed')\n",
-          "      else\n",
-          "         private-chef-ctl reconfigure >> /var/log/management-console-install.log\n",
-          "         opscode-manage-ctl reconfigure >> /var/log/management-console-install.log\n",
-          "      fi\n",
+          "if [ '", { "Ref": "MCDownloadURL" }, "' != 'NULL' ]; then\n",
+          "   wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm || error_exit 'Download of Enterprise Chef Management Console RPM failed.'\n",
+          "   yum -y install /tmp/management-console.rpm || error_exit 'Installation of Enterprise Chef Management Console RPM failed.'\n",
+          "   private-chef-ctl reconfigure | tee -a /var/log/management-console-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl reconfigure failed after installing Enterprise Chef Management Console.'\n",
+          "   fi\n",
+          "   opscode-manage-ctl reconfigure | tee -a /var/log/management-console-install.log \n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'opscode-manage-ctl reconfigure failed when installing Enterprise Chef Management Console.'\n",
           "   fi\n",
           "fi\n",
+
 
           "## Download and install Enterprise Chef Reporting\n",
-          "if [ '", { "Ref" : "RepDownloadURL" }, "' -ne '' ]; then\n",
-          "   wget '", { "Ref": "RepDownloadURL" }, "' -O /tmp/chef-reporting.rpm\n",
-          "   if [ $? -ne 0 ]; then\n",
-          "      error_exit('Download of Enterprise Chef Reporting RPM failed.')\n",
-          "   else\n",
-          "      yum -y install /tmp/chef-reporting.rpm\n",
-          "      if [ $? -ne 0 ]; then\n",
-          "         error_exit('RPM installation of Enterprise Chef Reporting feature failed.')\n",
-          "      else\n",
-          "         opscode-reporting-ctl reconfigure >> /var/log/chef-reporting-install.log\n",
-          "         private-chef-ctl restart opscode-reporting >> /var/log/chef-reporting-install.log\n",
-          "      fi\n",
+          "if [ '", { "Ref" : "RepDownloadURL" }, "' != 'NULL' ]; then\n",
+          "   wget '", { "Ref": "RepDownloadURL" }, "' -O /tmp/chef-reporting.rpm || error_exit 'Download of Enterprise Chef Reporting RPM failed.'\n",
+          "   yum -y install /tmp/chef-reporting.rpm || error_exit 'Installation of Enterprise Chef Reporting RPM failed.'\n",
+          "   opscode-reporting-ctl reconfigure | tee -a /var/log/chef-reporting-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'opscode-reporting-ctl reconfigure failed after installing Enterprise Chef Reporting.'\n",
+          "   fi\n",
+          "   private-chef-ctl restart opscode-reporting | tee -a /var/log/chef-reporting-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl restart opscode-reporting failed after installing Enterprise Chef Reporting.'\n",
           "   fi\n",
           "fi\n",
 
+
           "## Download and install the Enterprise Chef Push Jobs server\n",
-          "if [ '", { "Ref" : "WaitHandle" }, "' -ne '' ]; then\n",
-          "   wget '", { "Ref": "PushDownloadURL" }, "' -O /tmp/chef-pushjobs.rpm\n",
-          "   if [ $? -ne 0 ]; then\n",
-          "      error_exit('Download of Enterprise Chef Push Jobs RPM failed')\n",
-          "   else\n",
-          "      yum -y install /tmp/chef-pushjobs.rpm\n",
-          "      if [ $? -ne 0 ]; then\n",
-          "         error_exit('RPM installation of Enterprise Chef Push Jobs server failed.')\n",
-          "      else\n",
-          "         opscode-push-jobs-server-ctl reconfigure >> /var/log/chef-pushjobs-install.log\n",
-          "         private-chef-ctl reconfigure >> /var/log/chef-pushjobs-install.log\n",
-          "         private-chef-ctl restart opscode-pushy-server >> /var/log/chef-pushjobs-install.log\n",
-          "     fi\n",
+          "if [ '", { "Ref" : "PushDownloadURL" }, "' != 'NULL' ]; then\n",
+          "   wget '", { "Ref": "PushDownloadURL" }, "' -O /tmp/chef-pushjobs.rpm || error_exit 'Download of Enterprise Chef Push Jobs RPM failed.'\n",
+          "   yum -y install /tmp/chef-pushjobs.rpm || error_exit 'Installation of Enterprise Chef Push Jobs RPM failed.'\n",
+          "   opscode-push-jobs-server-ctl reconfigure | tee -a /var/log/chef-pushjobs-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'opscode-push-jobs-server-ctl reconfigure failed after installing Enterprise Chef Push Jobs server.'\n",
+          "   fi\n",
+          "   private-chef-ctl reconfigure | tee -a /var/log/chef-pushjobs-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl reconfigure failed after installing Enterprise Chef Push Jobs server.'\n",
+          "   fi\n",
+          "   private-chef-ctl restart opscode-pushy-server | tee -a /var/log/chef-pushjobs-install.log\n",
+          "   if [ $PIPESTATUS[0] -ne 0 ]; then \n",
+          "      error_exit 'private-chef-ctl restart opscode-pushy-server failed after installing Enterprise Chef Push Jobs server.'\n",
           "   fi\n",
           "fi\n",
+
 
           "# If all went well, signal success\n",
           "cfn-signal -e 0 -r 'Enterprise Chef Server configuration successful' '", { "Ref" : "WaitHandle" }, "'"
@@ -401,7 +363,7 @@
   "Outputs" : {
     "ChefServerURL" : {
       "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "ChefServer", "PublicDnsName" ]}]] },
-      "Description" : "URL for newly created Enterprise Chef server"
+      "Description" : "Enterprise Chef Server URL"
     }
   }
 }
