@@ -1,10 +1,9 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
-
   "Description" : "Standalone Enterprise Chef (EC) 11 server on Ubuntu 10.04.",
 
-  "Parameters" : {
 
+  "Parameters" : {
     "KeyName" : {
       "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
       "Type" : "String",
@@ -83,6 +82,7 @@
     }
   },
 
+
   "Mappings" : {
     "AWSInstanceType2Arch" : {
       "m1.xlarge"   : { "Arch" : "64" },
@@ -110,6 +110,7 @@
     }
   },
 
+
   "Conditions" : {
     "S3BackedBookshelf" : { "Fn::Equals" : [{ "Ref" : "S3Bookshelf" }, "true"] },
     "InstallMgmtConsole" : { "Fn::Not" : [{ "Fn::Equals" : [ { "Ref" : "MCDownloadURL" }, "NULL" ]}]},
@@ -119,7 +120,6 @@
   
 
   "Resources" : {
-
     "CfnUser" : {
       "Type" : "AWS::IAM::User",
       "Properties" : {
@@ -183,12 +183,11 @@
 
         "AWS::CloudFormation::Init" : {
           "config" : {
-            "yum" : {
-              "ntp"      : [],
-              "crontabs" : [],
-              "git"      : [],
-              "freetype" : [],
-              "libpng"   : []
+            "packages": {
+              "apt" : {
+                "ntp"      : [],
+                "git-core"      : []
+              }
             },
             "files": {
               "/etc/opscode/private-chef.rb" : {
@@ -218,14 +217,6 @@
                 "group": "root"
               }
             }
-          },
-          "services": {
-            "sysvinit": {
-              "ntpd": {
-                "enabled" : "true",
-                "ensureRunning" : "true"
-              }
-            }
           }
         }
       },
@@ -237,7 +228,7 @@
         "KeyName"        : { "Ref" : "KeyName" },
         "BlockDeviceMappings" : [
           {
-            "DeviceName" : "/dev/sda",
+            "DeviceName" : "/dev/sda1",
             "Ebs" : { "VolumeSize" : "50" }
           }
         ],
@@ -250,7 +241,7 @@
           "  exit 1\n",
           "}\n",
 
-          "resize2fs /dev/sda || error_exit 'Could not resize root volume'\n",
+          "resize2fs /dev/sda1 || error_exit 'Could not resize root volume'\n",
 
           "PUBLIC_DNS=`(curl http://169.254.169.254/latest/meta-data/public-hostname)`\n",
           "PRIVATE_IPV4=`(curl http://169.254.169.254/latest/meta-data/local-ipv4)`\n",
@@ -358,6 +349,7 @@
       }
     }
   },
+
 
   "Outputs" : {
     "ChefServerURL" : {
