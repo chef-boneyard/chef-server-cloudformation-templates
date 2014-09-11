@@ -1,8 +1,7 @@
-
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "Creates a standalone Enterprise Chef (EC) 11 server with Management Console using CentOS 6 that stores cookbooks in S3.",
+  "Description" : "Creates a standalone Chef 12 Server with Management Console using CentOS 6 that stores cookbooks in S3.",
 
   "Parameters" : {
 
@@ -14,31 +13,6 @@
       "AllowedPattern" : "[-_ a-zA-Z0-9]*",
       "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
     },
-
-    "ECDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Enterprise Chef RPM",
-      "Type": "String"
-    },
-
-    "MCDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Management Console RPM",
-      "Type": "String"
-    },
-
-    "RepDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Reporting RPM",
-      "Type": "String"
-    },
-
-    "PushDownloadURL": {
-      "Default": "",
-      "Description" : "URL to Push Jobs RPM",
-      "Type": "String"
-    },
-
 
     "InstanceType" : {
       "Description" : "EC2 instance type",
@@ -85,22 +59,22 @@
       "m2.2xlarge"  : { "Arch" : "PV64" },
       "m2.4xlarge"  : { "Arch" : "PV64" },
       "c1.xlarge"   : { "Arch" : "PV64" },
-      "cc1.4xlarge" : { "Arch" : "CLU64" },
-      "cc2.8xlarge" : { "Arch" : "CLU64" },
-      "cg1.4xlarge" : { "Arch" : "GPU64" },
+      "c3.xlarge"   : { "Arch" : "PV64" },
+      "cc1.4xlarge" : { "Arch" : "HVM64" },
+      "cc2.8xlarge" : { "Arch" : "HVM64" },
       "hi1.4xlarge" : { "Arch" : "PV64" },
       "hs1.8xlarge" : { "Arch" : "PV64" }
     },
 
     "AWSRegionArch2AMI" : {
-      "us-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-52009e3b", "64HVM" : "ami-eec75e87" },
-      "us-west-2"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-e030a5d0", "64HVM" : "ami-503bae60" },
-      "us-west-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-0a2f024f", "64HVM" : "NOT_YET_SUPPORTED" },
-      "eu-west-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-8aa3a8fe", "64HVM" : "ami-e4b5be90" },
-      "ap-southeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-0c034f5e", "64HVM" : "NOT_YET_SUPPORTED" },
-      "ap-southeast-2" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-f261f0c8", "64HVM" : "NOT_YET_SUPPORTED" },
-      "ap-northeast-1" : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-651a9b64", "64HVM" : "NOT_YET_SUPPORTED" },
-      "sa-east-1"      : { "32" : "NOT_YET_SUPPORTED", "64" : "ami-b32cf7ae", "64HVM" : "NOT_YET_SUPPORTED" }
+      "us-east-1"      : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-52009e3b", "HVM64" : "ami-eec75e87" },
+      "us-west-2"      : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-e030a5d0", "HVM64" : "ami-503bae60" },
+      "us-west-1"      : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-0a2f024f", "HVM64" : "NOT_YET_SUPPORTED" },
+      "eu-west-1"      : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-8aa3a8fe", "HVM64" : "ami-e4b5be90" },
+      "ap-southeast-1" : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-0c034f5e", "HVM64" : "NOT_YET_SUPPORTED" },
+      "ap-southeast-2" : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-f261f0c8", "HVM64" : "NOT_YET_SUPPORTED" },
+      "ap-northeast-1" : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-651a9b64", "HVM64" : "NOT_YET_SUPPORTED" },
+      "sa-east-1"      : { "32" : "NOT_YET_SUPPORTED", "PV64" : "ami-b32cf7ae", "HVM64" : "NOT_YET_SUPPORTED" }
     }
 
   },
@@ -164,7 +138,7 @@
     "ChefServer": {
       "Type": "AWS::EC2::Instance",
       "Metadata" : {
-        "Comment1" : "Configure the bootstrap helpers to install Enterprise Chef",
+        "Comment1" : "Configure the bootstrap helpers to install Chef Server",
 
         "AWS::CloudFormation::Init" : {
           "config" : {
@@ -174,17 +148,35 @@
                 "crontabs" : [],
                 "git"      : [],
                 "freetype" : [],
-                "libpng"   : []
+                "libpng"   : [],
+                "wget"     : [],
+                "curl"     : []
               }
             },
             "files": {
-              "/etc/opscode/private-chef.rb" : {
+              "/etc/yum.repos.d/chef-stable.repo" : {
                 "content": { "Fn::Join" : ["", [
+                  "[chef-stable]\n",
+                  "name=Chef Stable Repo\n",
+                  "baseurl=https://packagecloud.io/chef/stable/el/6/$basearch\n",
+                  "enabled=1\n",
+                  "gpgcheck=0\n",
+                  "gpgkey=https://packagecloud.io/gpg.key\n",
+                  "sslcacert=/etc/pki/tls/certs/ca-bundle.crt\n",
+                  "sslverify=1\n"
+                 ]]},
+                 "mode" : "000644",
+                 "owner": "root",
+                 "group": "root"
+              },
+              "/etc/opscode/chef-server.rb" : {
+                "content": { "Fn::Join" : ["", [
+                  "bookshelf['enable'] = false\n",
+                  "bookshelf['external_url'] = 'https://s3.amazonaws.com'\n",
                   "bookshelf['vip'] = 's3.amazonaws.com'\n",
                   "bookshelf['access_key_id'] = '", { "Ref" : "AccessKey" }, "'\n",
                   "bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]}, "'\n",
-                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n",
-                  "opscode_webui['enable'] = false \n"
+                  "opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\n"
                 ]]},
                 "mode" : "000644",
                 "owner": "root",
@@ -230,28 +222,13 @@
           "         --secret-key ", {"Fn::GetAtt": ["AccessKey", "SecretAccessKey"]},
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
-          "## Download the Enterprise Chef installer\n",
-          "wget '", { "Ref" : "ECDownloadURL" }, "' -O /tmp/private-chef.rpm\n",
-          "yum -y install /tmp/private-chef.rpm\n",
-          "## Download the Enterprice Chef Management Console installer\n",
-          "wget '", { "Ref": "MCDownloadURL" }, "' -O /tmp/management-console.rpm\n",
-          "yum -y install /tmp/management-console.rpm\n",
-          "## Download the Enterprise Chef Reporting installer\n",
-          "wget '", { "Ref": "RepDownloadURL" }, "' -O /tmp/chef-reporting.rpm\n",
-          "yum -y install /tmp/chef-reporting.rpm\n",
-          "## Download the Enterprise Chef Push Jobs installer\n",
-          "wget '", { "Ref": "PushDownloadURL" }, "' -O /tmp/chef-pushjobs.rpm\n",
-          "yum -y install /tmp/chef-pushjobs.rpm\n",
+          "## Download Enterprise Chef installer\n",
+          "yum -y install chef-server-core opscode-manage\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
-          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
-          "opscode-manage-ctl reconfigure >> /var/log/manage-install.log\n",
-          "opscode-reporting-ctl reconfigure >> /var/log/reporting-install.log\n",
-          "opscode-push-jobs-server-ctl reconfigure >> /var/log/pushjobs-install.log\n",
-          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
-          "private-chef-ctl restart opscode-reporting\n",
-
+          "chef-server-ctl reconfigure >> /var/log/chef-install.log\n",
+          "opscode-manage-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef Server configuration' '", { "Ref" : "WaitHandle" }, "'\n"
