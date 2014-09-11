@@ -22,13 +22,6 @@ Each template takes four variables that need to be provided when a new stack is 
     <td><em>nil</em></td>
   </tr>
   <tr>
-    <td><strong>ECDownloadURL</strong></td>
-    <td>String</td>
-    <td>The download URL for the Enterprise Chef package provided by Opscode</td>
-    <td><em>nil</em></td>
-  </tr>
-  </tr>
-  <tr>
     <td><strong>InstanceType</strong></td>
     <td>String</td>
     <td>The instance type to be used.</td>
@@ -46,24 +39,16 @@ Each template takes four variables that need to be provided when a new stack is 
 
 Using Command Line Tools
 ------------------------
-The following command will create a new stack named **ec-aws-poc** in the **us-west-2** region. **Note:** You will need to either set environment variables for the <tt>$AWS_ACCESS_KEY</tt> and <tt>$AWS_SECRET_KEY</tt> values or enter them directly on the command line.
+The following command will create a new standalone stack named **ec-aws-poc** using the `aws` command-line tool. This assumes you have $HOME/.aws/config set up correctly:
 
 ```
-cfn-create-stack ec-aws-poc --region us-west-2 --template-file ec-standalone-2.template -K ../ec-aws-poc.pem -p "KeyName=ec-aws-poc;ECDownloadURL=http://s3.amazonaws.com/opscode-private-chef/ubuntu/10.04/x86_64/private-chef_1.4.6-1.ubuntu.10.04_amd64.deb?AWSAccessKeyId=AKIAJFEFN6I3YE4UAMLA&Expires=1378648806&Signature=zvOL4xmP4Ac2TMkKpOky%2B3xcjKw%3D;InstanceType=c1.medium;SSHLocation=0.0.0.0/0" -I $AWS_ACCESS_KEY -S $AWS_SECRET_KEY --capabilities CAPABILITY_IAM
-```
-
-Using the Knife CloudFormation Plugin
--------------------------------------
-
-There is also a [knife-cfn](https://github.com/neillturner/knife-cfn) plugin that will allow you to validate and create stacks using Knife.
-
-```
-knife cfn create yourstackname -p "KeyName=yourkey;ECDownloadURL=http://your-ec-download-url.com;SSHLocation=1.2.3.4/32" -f ec-standalone-centos-6-amd64_ebs.template --capabilities CAPABILITY_IAM
+aws cloudformation create-stack --stack-name ec-aws-poc --template-body file:///Users/You/path/to/chef-server-cloudformation-templates/standalone/ec-standalone-centos-6-amd64_ebs_s3cookbooks.template --parameters ParameterKey=KeyName,ParameterValue=your-aws-ssh-key-name --capabilities CAPABILITY_IAM
 ```
 
 Using the AWS Management Console
 --------------------------------
-TODO
+
+You may also upload the templates to the AWS Management Console and create stacks from there.
 
 Templates
 =========
@@ -79,3 +64,8 @@ Tiered
 ------
 
 * ec-tiered-centos-6-amd64_vpc_ebs_s3_cookbooks.template - Installs EC in tiered mode. Note that the stack name has to be 35 characters or less, otherwise the OpenSSL CN will be too long and EC won't be able to generate a certificate.
+
+High-Availability
+-----------------
+
+Coming soon
