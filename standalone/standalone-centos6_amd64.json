@@ -223,7 +223,7 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download Enterprise Chef installer\n",
-          "yum -y install chef-server-core opscode-manage\n",
+          "yum -y install chef-server-core opscode-manage || error_exit 'Failed to install Chef Server'\n",
           "hostname $SHORTNAME\n",
           "echo $PUBLIC_DNS | tee /etc/hostname\n",
           "echo \"$PRIVATE_IPV4 $PUBLIC_DNS $SHORTNAME\" >> /etc/hosts\n",
