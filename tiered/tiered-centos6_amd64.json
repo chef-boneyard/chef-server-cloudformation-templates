@@ -13,12 +13,6 @@
       "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
     },    
 
-    "ECDownloadURL": {
-      "Default": "",
-      "Description" : "Enterprise Chef download link",
-      "Type": "String"
-    },
-
     "FrontendSize" : {
       "Description" : "Number of EC2 instances to launch for the frontend servers",
       "Type" : "Number",
@@ -507,35 +501,35 @@
       }
     },
 
-    "OpscodeDataBucket" : {
+    "ChefDataBucket" : {
       "Type" : "AWS::S3::Bucket",
       "Properties" : {
         "AccessControl" : "Private"
       }      
     },
 
-    "OpscodeDataBucketPolicy" : {
+    "ChefDataBucketPolicy" : {
       "Type" : "AWS::S3::BucketPolicy",
       "Properties" : {
         "PolicyDocument": {
           "Version"      : "2008-10-17",
-          "Id"           : "OpscodeDataPolicy",
+          "Id"           : "ChefDataPolicy",
           "Statement"    : [
             {
               "Action"     : ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
               "Effect"     : "Allow",
-              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "OpscodeDataBucket"} , "/*"]]},
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "ChefDataBucket"} , "/*"]]},
               "Principal"  : { "AWS": {"Fn::GetAtt" : ["S3User", "Arn"]} }
             },
             {
               "Action"     : ["s3:ListBucket"],
               "Effect"     : "Allow",
-              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "OpscodeDataBucket"}]]},
+              "Resource"   : { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref" : "ChefDataBucket"}]]},
               "Principal"  : { "AWS": {"Fn::GetAtt" : ["S3User", "Arn"]} }
             }
           ]
         },
-        "Bucket" : {"Ref" : "OpscodeDataBucket"}
+        "Bucket" : {"Ref" : "ChefDataBucket"}
       }
     },
 
@@ -568,6 +562,21 @@
                 "mode"  : "000600",
                 "owner" : "root",
                 "group" : "root" 
+              },
+              "/etc/yum.repos.d/chef-stable.repo" : {
+                "content": { "Fn::Join" : ["", [
+                  "[chef-stable]\n",
+                  "name=Chef Stable Repo\n",
+                  "baseurl=https://packagecloud.io/chef/stable/el/6/$basearch\n",
+                  "enabled=1\n",
+                  "gpgcheck=0\n",
+                  "gpgkey=https://packagecloud.io/gpg.key\n",
+                  "sslcacert=/etc/pki/tls/certs/ca-bundle.crt\n",
+                  "sslverify=1\n"
+                 ]]},
+                 "mode" : "000644",
+                 "owner": "root",
+                 "group": "root"
               }
             },
             "services": {
@@ -611,43 +620,45 @@
           "         --secret-key ", {"Fn::GetAtt": ["CfnAccessKey", "SecretAccessKey"]},
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
-          "## Download the Enterprise Chef installer\n",
-          "wget --no-check-certificate \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm || error_exit 'Failed to install Chef Server'\n",
+          "## Download the Chef Server installer\n",
+          "yum -y install chef-server-core || error_exit 'Failed to install Chef Server'\n",
 
-          "## Generate /etc/opscode/private-chef.rb\n",
+          "## Generate /etc/opscode/chef-server.rb\n",
           "mkdir /etc/opscode\n",
-          "echo \"topology 'tier'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"server '$SHORTNAME',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :ipaddress => '$PRIVATE_IPV4',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :role => 'backend',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :bootstrap => true\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"backend_vip '$SHORTNAME',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :ipaddress => '$PRIVATE_IPV4'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"topology 'tier'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"server '$SHORTNAME',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :role => 'backend',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :bootstrap => true\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"backend_vip '$SHORTNAME',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4'\" >> /etc/opscode/chef-server.rb\n",
 
-          "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]},"'\" >> /etc/opscode/chef-server.rb\n",
 
-          "echo \"bookshelf['vip'] = 's3.amazonaws.com'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['enable'] = false\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['vip'] = 's3.amazonaws.com'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['external_url'] = 'https://s3.amazonaws.com'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/chef-server.rb\n",
 
           "if [ x", { "Ref" : "NginxCertificate" }, " != x ] && [ x", { "Ref" : "NginxCertificateKey" }, " != x ]; then \n",
-          "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/private-chef.crt\n",
-          "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/private-chef.key\n",
-          "  chmod 400 /etc/pki/tls/private/private-chef.key\n",
-          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/private-chef.crt'\" >> /etc/opscode/private-chef.rb\n",
-          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/private-chef.key'\" >> /etc/opscode/private-chef.rb\n",
+          "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/chef-server.crt\n",
+          "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/chef-server.key\n",
+          "  chmod 644 /etc/pki/tls/certs/chef-server.crt\n",
+          "  chmod 400 /etc/pki/tls/private/chef-server.key\n",
+          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/chef-server.crt'\" >> /etc/opscode/chef-server.rb\n",
+          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/chef-server.key'\" >> /etc/opscode/chef-server.rb\n",
           "fi\n",
 
           "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
-          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
+          "chef-server-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# Copy /etc/opscode pieces to S3 bucket\n",
-          "s3cmd -c /etc/s3cfg put /etc/opscode/*.pem s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg put /etc/opscode/*.cert s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg put /etc/opscode/private-chef-secrets.json s3://", {"Ref" : "OpscodeDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
+          "s3cmd -c /etc/s3cfg put /etc/opscode/*.pem s3://", {"Ref" : "ChefDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg put /etc/opscode/*.cert s3://", {"Ref" : "ChefDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg put /etc/opscode/private-chef-secrets.json s3://", {"Ref" : "ChefDataBucket" } ,"/ >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to put Chef Server secrets'\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef backend server configuration' '", { "Ref" : "BackendWaitHandle" }, "'\n"
@@ -791,6 +802,21 @@
                 "mode"  : "000600",
                 "owner" : "root",
                 "group" : "root" 
+              },
+              "/etc/yum.repos.d/chef-stable.repo" : {
+                "content": { "Fn::Join" : ["", [
+                  "[chef-stable]\n",
+                  "name=Chef Stable Repo\n",
+                  "baseurl=https://packagecloud.io/chef/stable/el/6/$basearch\n",
+                  "enabled=1\n",
+                  "gpgcheck=0\n",
+                  "gpgkey=https://packagecloud.io/gpg.key\n",
+                  "sslcacert=/etc/pki/tls/certs/ca-bundle.crt\n",
+                  "sslverify=1\n"
+                 ]]},
+                 "mode" : "000644",
+                 "owner": "root",
+                 "group": "root"
               }
             },
             "services": {
@@ -833,45 +859,46 @@
           "         --secret-key ", {"Fn::GetAtt": ["CfnAccessKey", "SecretAccessKey"]},
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
-          "## Download the Enterprise Chef installer\n",
-          "wget --no-check-certificate \"", { "Ref" : "ECDownloadURL" }, "\" -O /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
-          "yum -y install /tmp/private-chef-11.0.0.el6.x86_64.rpm\n",
+          "## Download the Chef Server installer\n",
+          "yum -y install chef-server-core || error_exit 'Failed to install Chef Server'\n",
 
-          "## Generate /etc/opscode/private-chef.rb\n",
+          "## Generate /etc/opscode/chef-server.rb\n",
           "mkdir /etc/opscode\n",
-          "echo \"topology 'tier'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"server '$SHORTNAME',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :ipaddress => '$PRIVATE_IPV4',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :role => 'frontend'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"backend_vip '", { "Fn::GetAtt": ["BackendServer", "PrivateDnsName"] }, "',\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"  :ipaddress => '",  { "Fn::GetAtt": ["BackendServer", "PrivateIp"] }, "'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"topology 'tier'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"server '$SHORTNAME',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :ipaddress => '$PRIVATE_IPV4',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :role => 'frontend'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"backend_vip '", { "Fn::GetAtt": ["BackendServer", "PrivateDnsName"] }, "',\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"  :ipaddress => '",  { "Fn::GetAtt": ["BackendServer", "PrivateIp"] }, "'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"api_fqdn '", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}, "'\" >> /etc/opscode/chef-server.rb\n",
 
-          "echo \"bookshelf['vip'] = 's3.amazonaws.com'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/private-chef.rb\n",
-          "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/private-chef.rb\n",
+          "echo \"bookshelf['enable'] = false\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['vip'] = 's3.amazonaws.com'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['external_url'] = 'https://s3.amazonaws.com'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['access_key_id'] = '", { "Ref" : "S3AccessKey" }, "'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"bookshelf['secret_access_key'] = '", {"Fn::GetAtt": ["S3AccessKey", "SecretAccessKey"]}, "'\" >> /etc/opscode/chef-server.rb\n",
+          "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/chef-server.rb\n",
 
           "if [ x", { "Ref" : "NginxCertificate" }, " != x ] && [ x", { "Ref" : "NginxCertificateKey" }, " != x ]; then \n",
           "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/private-chef.crt\n",
           "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/private-chef.key\n",
           "  chmod 400 /etc/pki/tls/private/private-chef.key\n",
-          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/private-chef.crt'\" >> /etc/opscode/private-chef.rb\n",
-          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/private-chef.key'\" >> /etc/opscode/private-chef.rb\n",
+          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/private-chef.crt'\" >> /etc/opscode/chef-server.rb\n",
+          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/private-chef.key'\" >> /etc/opscode/chef-server.rb\n",
           "fi\n",
 
           "# Copy /etc/opscode pieces from S3 bucket\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.pem /etc/opscode/pivotal.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/pivotal.cert /etc/opscode/pivotal.cert >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_priv.pem /etc/opscode/webui_priv.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/webui_pub.pem /etc/opscode/webui_pub.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-private.pem /etc/opscode/worker-private.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/worker-public.pem /etc/opscode/worker-public.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
-          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "OpscodeDataBucket" } ,"/private-chef-secrets.json /etc/opscode/private-chef-secrets.json >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server secrets'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/pivotal.pem /etc/opscode/pivotal.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/pivotal.cert /etc/opscode/pivotal.cert >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/webui_priv.pem /etc/opscode/webui_priv.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/webui_pub.pem /etc/opscode/webui_pub.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/worker-private.pem /etc/opscode/worker-private.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/worker-public.pem /etc/opscode/worker-public.pem >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server certificates'\n",
+          "s3cmd -c /etc/s3cfg get s3://", {"Ref" : "ChefDataBucket" } ,"/private-chef-secrets.json /etc/opscode/private-chef-secrets.json >> /var/log/chef-install.log 2>&1 || error_exit 'Failed to get Chef Server secrets'\n",
 
           "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
-          "private-chef-ctl reconfigure >> /var/log/chef-install.log\n",
+          "chef-server-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef frontend server configuration' '", { "Ref" : "FrontendWaitHandle" }, "'\n"
@@ -925,7 +952,7 @@
   "Outputs" : {
     "ChefServerURL" : {
       "Value" : { "Fn::Join" : ["", ["https://", { "Fn::GetAtt" : [ "PublicElasticLoadBalancer", "DNSName" ]}]] },
-      "Description" : "URL for newly Enterprise Chef server"
+      "Description" : "URL for new Chef server"
     },
     "Bastion" : {
       "Description" : "IP Address of the Bastion host",
