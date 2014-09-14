@@ -692,6 +692,7 @@
           {"IpProtocol" : "tcp", "FromPort" : "9680", "ToPort" : "9680", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
           {"IpProtocol" : "tcp", "FromPort" : "9683", "ToPort" : "9683", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
           {"IpProtocol" : "tcp", "FromPort" : "9685", "ToPort" : "9685", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
+          {"IpProtocol" : "tcp", "FromPort" : "16379", "ToPort" : "16379", "SourceSecurityGroupId" : {"Ref" : "FrontendSecurityGroup" }},
           {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup" } } ],
         "SecurityGroupEgress" : [
           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
@@ -860,7 +861,7 @@
           "         --region     ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
 
           "## Download the Chef Server installer\n",
-          "yum -y install chef-server-core || error_exit 'Failed to install Chef Server'\n",
+          "yum -y install chef-server-core opscode-manage || error_exit 'Failed to install Chef Server'\n",
 
           "## Generate /etc/opscode/chef-server.rb\n",
           "mkdir /etc/opscode\n",
@@ -880,11 +881,11 @@
           "echo \"opscode_erchef['s3_bucket'] = '", { "Ref" : "CookbooksBucket" }, "'\" >> /etc/opscode/chef-server.rb\n",
 
           "if [ x", { "Ref" : "NginxCertificate" }, " != x ] && [ x", { "Ref" : "NginxCertificateKey" }, " != x ]; then \n",
-          "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/private-chef.crt\n",
-          "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/private-chef.key\n",
-          "  chmod 400 /etc/pki/tls/private/private-chef.key\n",
-          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/private-chef.crt'\" >> /etc/opscode/chef-server.rb\n",
-          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/private-chef.key'\" >> /etc/opscode/chef-server.rb\n",
+          "  wget \"", { "Ref" : "NginxCertificate" }, "\" -O /etc/pki/tls/certs/chef-server.crt\n",
+          "  wget \"", { "Ref" : "NginxCertificateKey" }, "\" -O /etc/pki/tls/private/chef-server.key\n",
+          "  chmod 400 /etc/pki/tls/private/chef-server.key\n",
+          "  echo \"nginx['ssl_certificate']  = '/etc/pki/tls/certs/chef-server.crt'\" >> /etc/opscode/chef-server.rb\n",
+          "  echo \"nginx['ssl_certificate_key']  = '/etc/pki/tls/private/chef-server.key'\" >> /etc/opscode/chef-server.rb\n",
           "fi\n",
 
           "# Copy /etc/opscode pieces from S3 bucket\n",
@@ -899,6 +900,7 @@
           "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
           "chef-server-ctl reconfigure >> /var/log/chef-install.log\n",
+          "opscode-manage-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# If all went well, signal success\n",
           "cfn-signal -e $? -r 'Chef frontend server configuration' '", { "Ref" : "FrontendWaitHandle" }, "'\n"
