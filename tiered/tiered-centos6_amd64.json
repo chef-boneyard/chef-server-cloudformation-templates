@@ -930,7 +930,7 @@
         "GroupId": { "Ref": "FrontendSecurityGroup" },
         "IpProtocol": "tcp",
         "FromPort": "4321",
-        "ToPort": "9685",
+        "ToPort": "16379",
         "DestinationSecurityGroupId": {"Ref" : "BackendSecurityGroup" }
       }
     },
