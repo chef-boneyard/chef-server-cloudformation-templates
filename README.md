@@ -56,14 +56,19 @@ Templates
 Standalone
 ----------
 
-* standalone-centos6_amd64.template - Installs Chef Server 12 on an EBS-backed CentOS6 instance. Stores cookbooks in S3. The images in use are the ones from [Bashton](http://www.bashton.com/) since they include cloud-init.
+`standalone-centos6_amd64.json` installs Chef Server 12 on an EBS-backed CentOS6 instance. Stores cookbooks in S3. The images in use are the ones from [Bashton](http://www.bashton.com/) since they include cloud-init.
 
 Tiered
 ------
 
-Under construction - old:
+`tiered-centos-6_amd64.json` installs Chef Server 12 in tiered mode (single backend, multiple frontends in an autoscaling group)
 
-* ec-tiered-centos-6-amd64_vpc_ebs_s3_cookbooks.template - Installs EC in tiered mode. Note that the stack name has to be 35 characters or less, otherwise the OpenSSL CN will be too long and EC won't be able to generate a certificate.
+To set up tiered, you need to perform a few additional steps in advance:
+
+# Place your server SSL certificate and key on an HTTP server reachable by the bootstrap instance. (It would be possible to modify the template so these keys are retrieved from an S3 bucket, but this is left as an exercise to the reader.)
+# Upload the SSL certificate and key you wish to use on the frontend Elastic Load Balancer to AWS IAM, and record the ARN.
+
+Note that the stack name has to be 35 characters or less, otherwise the OpenSSL CN will be too long and nginx won't be able to generate a certificate.
 
 High-Availability
 -----------------
