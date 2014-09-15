@@ -1,7 +1,7 @@
 
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
-  "Description" : "AWS CloudFormation Template for a tiered implementation of Enterprise Chef in a VPC with cookbook storage in S3.",
+  "Description" : "Tiered implementation of Chef Server 12 in a VPC with cookbook storage in S3.",
   "Parameters" : {
       
     "KeyName" : {
@@ -789,7 +789,8 @@
                 "git"      : [],
                 "freetype" : [],
                 "libpng"   : [],
-                "s3cmd"    : []
+                "s3cmd"    : [],
+                "gcc"      : []
               }
             },
             "files" : {
@@ -900,6 +901,10 @@
           "echo \"$PRIVATE_IPV4 $SHORTNAME $LONGNAME\" >> /etc/hosts\n",
 
           "chef-server-ctl reconfigure >> /var/log/chef-install.log\n",
+
+          "# Patch for OC-11746 -- also remove gcc from the system once this is fixed\n",
+          "sed -i -e \"s#gem 'chef', '~> 11.10.4'#gem 'chef', '~> 11.12.0'#\" /opt/opscode-manage/embedded/service/opscode-manage/Gemfile\n",
+          "cd /opt/opscode-manage/embedded/service/opscode-manage && /opt/opscode-manage/embedded/bin/bundle update chef\n",
           "opscode-manage-ctl reconfigure >> /var/log/chef-install.log\n",
 
           "# If all went well, signal success\n",
