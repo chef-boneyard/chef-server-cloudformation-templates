@@ -45,6 +45,8 @@ The following command will create a new standalone stack named **ec-aws-poc** us
 aws cloudformation create-stack --stack-name ec-aws-poc --template-body file:///Users/You/path/to/chef-server-cloudformation-templates/standalone/ec-standalone-centos-6-amd64_ebs_s3cookbooks.template --parameters ParameterKey=KeyName,ParameterValue=your-aws-ssh-key-name --capabilities CAPABILITY_IAM
 ```
 
+Note: The templates are set up assuming the `us-east-1` region. Your S3 endpoints may change if you are deploying into another region (e.g. substitute `s3-us-west-2.amazonaws.com` for `s3.amazonaws.com` if in us-west-2)
+
 Using the AWS Management Console
 --------------------------------
 
