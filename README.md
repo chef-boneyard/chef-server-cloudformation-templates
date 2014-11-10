@@ -1,4 +1,4 @@
-This repository contains AWS Cloudformation templates for installing Enterprise Chef in various configurations. You can read more about AWS Cloudformation [here](http://aws.amazon.com/cloudformation/).
+This repository contains AWS Cloudformation templates for installing Chef Server 12 in various configurations. You can read more about AWS Cloudformation [here](http://aws.amazon.com/cloudformation/).
 
 How To Use These Templates
 ==========================
@@ -67,8 +67,8 @@ Tiered
 
 To set up tiered, you need to perform a few additional steps in advance:
 
-# Place your server SSL certificate and key on an HTTP server reachable by the bootstrap instance. (It would be possible to modify the template so these keys are retrieved from an S3 bucket, but this is left as an exercise to the reader.)
-# Upload the SSL certificate and key you wish to use on the frontend Elastic Load Balancer to AWS IAM, and record the ARN.
+* Place your server SSL certificate and key on an HTTP server reachable by the bootstrap instance. (It would be possible to modify the template so these keys are retrieved from an S3 bucket, but this is left as an exercise to the reader.)
+* Upload the SSL certificate and key you wish to use on the frontend Elastic Load Balancer to AWS IAM, and record the ARN.
 
 Note that the stack name has to be 35 characters or less, otherwise the OpenSSL CN will be too long and nginx won't be able to generate a certificate.
 
@@ -76,3 +76,23 @@ High-Availability
 -----------------
 
 Coming soon
+
+License & Authors
+-----------------
+- Author:: Julian C. Dunn (<jdunn@getchef.com>)
+
+```text
+Copyright:: 2013-2014 Chef Software, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
