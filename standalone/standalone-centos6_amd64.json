@@ -160,8 +160,8 @@
                   "name=Chef Stable Repo\n",
                   "baseurl=https://packagecloud.io/chef/stable/el/6/$basearch\n",
                   "enabled=1\n",
-                  "gpgcheck=0\n",
-                  "gpgkey=https://packagecloud.io/gpg.key\n",
+                  "gpgcheck=1\n",
+                  "gpgkey=https://downloads.chef.io/packages-chef-io-public.key\n",
                   "sslcacert=/etc/pki/tls/certs/ca-bundle.crt\n",
                   "sslverify=1\n"
                  ]]},
