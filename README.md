@@ -1,3 +1,8 @@
+A word of warning...
+====================
+The code in this repository is not actively maintained and may not work as expected.  For the latest versions of Chef Server and Chef Automate please visit www.chef.io and follow the installation instructions there.
+
+
 This repository contains AWS Cloudformation templates for installing Chef Server 12 in various configurations. You can read more about AWS Cloudformation [here](http://aws.amazon.com/cloudformation/).
 
 How To Use These Templates
